@@ -25,6 +25,12 @@ const introParagraphs = [
   'The structure of cricket creates a constant balance between skill and pressure. Batters must make decisions under timing constraints, bowlers must control rhythm and variation, and fielders must react quickly to shifting game situations. Matches often change direction because of a single over, a strategic decision, or a player entering strong form. This makes the game exciting to follow, but it also means that performance is shaped by context rather than by a single statistic alone. Venue, format, and match stage can all influence how teams play. These features make cricket especially interesting for data analysis because many factors can contribute to the final outcome. A match may look simple at a glance, but it is full of layered decisions and changing conditions. That complexity is one reason cricket continues to attract attention from analysts and fans alike. It is a sport where understanding the broader pattern can reveal as much as understanding the final result.'
 ]
 
+const introTitles = [
+  'Cricket as a Global Sport',
+  'Cricket\'s Social and Economic Impact',
+  'The Role of Skill, Pressure, and Context'
+]
+
 const questions = [
   'Which batting statistics most strongly influence the likelihood of a team winning a match?',
   'How do strike rate and run rate change under different phases of an innings?',
@@ -181,6 +187,17 @@ function App() {
   const [liveMatches, setLiveMatches] = useState([])
   const [apiStatus, setApiStatus] = useState('idle')
   const [apiError, setApiError] = useState('')
+  const [bannerMessage, setBannerMessage] = useState('')
+
+  useEffect(() => {
+    const hideBanner = () => setBannerMessage('')
+
+    document.addEventListener('click', hideBanner)
+
+    return () => {
+      document.removeEventListener('click', hideBanner)
+    }
+  }, [])
 
   useEffect(() => {
     if (activeTab !== 'DataPrep/EDA') {
@@ -268,8 +285,11 @@ function App() {
   const renderIntro = () => (
     <section className="content-panel">
       <div className="text-block">
-        {introParagraphs.map((paragraph) => (
-          <p key={paragraph}>{paragraph}</p>
+        {introParagraphs.map((paragraph, index) => (
+          <details key={paragraph} className="intro-disclosure">
+            <summary>{introTitles[index]}</summary>
+            <p>{paragraph}</p>
+          </details>
         ))}
       </div>
 
@@ -583,29 +603,55 @@ function App() {
   }
 
   return (
-    <div className="page-shell sidebar-layout">
-      <aside className="sidebar">
-        <div className="brand-wrap">
-          <div className="brand-mark">CR</div>
-          <span>Cricket Analytics Project</span>
-        </div>
-
-        <nav className="tab-nav" aria-label="Project navigation">
-          {tabs.map((tab) => (
+    <>
+      <div className="top-banner" aria-label="Project highlights">
+        <div className="top-banner-inner">
+          {['Cricket ML', 'Match Analytics', 'Feature Engineering', 'Prediction Models'].map((label) => (
             <button
-              key={tab}
+              key={label}
               type="button"
-              className={activeTab === tab ? 'tab-button active' : 'tab-button'}
-              onClick={() => setActiveTab(tab)}
+              className="banner-pill"
+              onClick={(event) => {
+                event.stopPropagation()
+                setBannerMessage(`${label}: Coming soon`)
+              }}
             >
-              {tab}
+              {label}
             </button>
           ))}
-        </nav>
-      </aside>
+        </div>
+      </div>
 
-      <main className="content-wrap">{renderTab()}</main>
-    </div>
+      {bannerMessage ? (
+        <div className="banner-toast" role="status" aria-live="polite">
+          {bannerMessage}
+        </div>
+      ) : null}
+
+      <div className="page-shell sidebar-layout">
+        <aside className="sidebar">
+          <div className="brand-wrap">
+            <div className="brand-mark">CR</div>
+            <span>Cricket Analytics Project</span>
+          </div>
+
+          <nav className="tab-nav" aria-label="Project navigation">
+            {tabs.map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                className={activeTab === tab ? 'tab-button active' : 'tab-button'}
+                onClick={() => setActiveTab(tab)}
+              >
+                {tab}
+              </button>
+            ))}
+          </nav>
+        </aside>
+
+        <main className="content-wrap">{renderTab()}</main>
+      </div>
+    </>
   )
 }
 

@@ -1,7 +1,72 @@
-.page-shell {
+.top-banner {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: linear-gradient(90deg, #0ea5e9 0%, #22d3ee 20%, #8b5cf6 45%, #f59e0b 75%, #f97316 100%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 10px 30px rgba(14, 165, 233, 0.22);
+}
+
+.top-banner-inner {
   width: min(1200px, calc(100% - 32px));
   margin: 0 auto;
-  padding: 30px 0 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 0;
+}
+
+.banner-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(10px);
+  background: rgba(15, 23, 42, 0.15);
+  cursor: pointer;
+  transition: transform 0.2s ease, filter 0.2s ease;
+}
+
+.banner-pill:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+}
+
+.banner-pill-primary {
+  background: rgba(15, 118, 110, 0.35);
+}
+
+.banner-pill-cyan {
+  background: rgba(14, 116, 144, 0.3);
+}
+
+.banner-pill-purple {
+  background: rgba(109, 40, 217, 0.28);
+}
+
+.banner-pill-gold {
+  background: rgba(194, 65, 12, 0.28);
+}
+
+.banner-toast {
+  width: min(1200px, calc(100% - 32px));
+  margin: 14px auto 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.82);
+  border: 1px solid rgba(103, 232, 249, 0.4);
+  color: #e0f2fe;
+  font-weight: 600;
+  box-shadow: 0 10px 20px rgba(14, 165, 233, 0.12);
 }
 
 .page-shell {
@@ -124,6 +189,48 @@
 .text-block p {
   margin-bottom: 1.4rem;
   font-size: 1.06rem;
+}
+
+.intro-disclosure {
+  margin-bottom: 12px;
+  border: 1px solid rgba(103, 232, 249, 0.16);
+  border-radius: 16px;
+  background: rgba(2, 6, 23, 0.28);
+  overflow: hidden;
+}
+
+.intro-disclosure summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 16px 20px;
+  color: #f8fafc;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.intro-disclosure summary::-webkit-details-marker {
+  display: none;
+}
+
+.intro-disclosure summary::after {
+  content: '+';
+  float: right;
+  color: #67e8f9;
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.intro-disclosure[open] summary {
+  border-bottom: 1px solid rgba(103, 232, 249, 0.14);
+}
+
+.intro-disclosure[open] summary::after {
+  content: '-';
+}
+
+.intro-disclosure p {
+  margin: 0;
+  padding: 16px 20px 20px;
 }
 
 .image-grid {
