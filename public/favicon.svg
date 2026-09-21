@@ -1,0 +1,13 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="CR brand icon">
+  <defs>
+    <linearGradient id="bg" x1="0%" x2="100%" y1="0%" y2="100%">
+      <stop offset="0%" stop-color="#67e8f9"/>
+      <stop offset="50%" stop-color="#60a5fa"/>
+      <stop offset="100%" stop-color="#8b5cf6"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="18" fill="#0f172a"/>
+  <rect x="4" y="4" width="56" height="56" rx="14" fill="url(#bg)" opacity="0.18"/>
+  <path d="M22 18h11.5c8.3 0 15 6.7 15 15s-6.7 15-15 15H22v-6h11.5c5 0 9-4 9-9s-4-9-9-9H22V18zm-9 0h8v30h-8V18zm13 0h8v30h-8V18z" fill="#f8fafc"/>
+  <text x="32" y="47" text-anchor="middle" font-family="Arial, sans-serif" font-weight="800" font-size="18" fill="#f8fafc">CR</text>
+</svg>
