@@ -4,13 +4,15 @@ This project is a cricket-focused machine learning website built with React and 
 
 ## API and data focus
 
-The project is designed around cricket data and uses a sports API approach for data collection. The example API key provided for this project is:
+The project is designed around cricket data and uses a sports API approach for data collection. For local development, create a `.env.local` file in the project root with:
 
-aa7af3d9-ba4c-41bd-84c4-2956511902e4
+VITE_CRICAPI_KEY=your_key_here
 
-A sample query structure is shown in the DataPrep_EDA tab and can be used with a sports API endpoint such as:
+A sample query structure is shown in the DataPrep/EDA tab and can be used with a sports API endpoint such as:
 
-https://api.cricapi.com/v1/currentMatches?apikey=aa7af3d9-ba4c-41bd-84c4-2956511902e4&offset=0
+https://api.cricapi.com/v1/currentMatches?apikey=YOUR_API_KEY&offset=0
+
+Do not commit `.env.local` or any real API key to GitHub.
 
 ## Getting started
 

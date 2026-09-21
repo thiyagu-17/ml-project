@@ -14,7 +14,7 @@ const tabs = [
   'Conclusions',
 ]
 
-const CRICAPI_KEY = 'aa7af3d9-ba4c-41bd-84c4-2956511902e4'
+const CRICAPI_KEY = import.meta.env.VITE_CRICAPI_KEY || 'YOUR_API_KEY'
 const CRICAPI_BASE_URL = 'https://api.cricapi.com/v1'
 
 const introParagraphs = [
@@ -434,7 +434,7 @@ function App() {
       <div className="data-links-row">
         <div className="data-download-card">
           <h3>Raw data</h3>
-          <a href="https://api.cricapi.com/v1/currentMatches?apikey=aa7af3d9-ba4c-41bd-84c4-2956511902e4&offset=0" target="_blank" rel="noreferrer">CricAPI live match feed</a>
+          <a href="https://api.cricapi.com/v1/currentMatches?apikey=YOUR_API_KEY&offset=0" target="_blank" rel="noreferrer">CricAPI live match feed</a>
         </div>
         <div className="data-download-card">
           <h3>Cleaned data</h3>
@@ -485,7 +485,7 @@ function App() {
       <div className="data-links">
         <div>
           <h3>Raw data</h3>
-          <a href="https://api.cricapi.com/v1/currentMatches?apikey=aa7af3d9-ba4c-41bd-84c4-2956511902e4&offset=0" target="_blank" rel="noreferrer">CricAPI current matches endpoint</a>
+          <a href="https://api.cricapi.com/v1/currentMatches?apikey=YOUR_API_KEY&offset=0" target="_blank" rel="noreferrer">CricAPI current matches endpoint</a>
           <a href="https://www.espncricinfo.com/" target="_blank" rel="noreferrer">ESPN Cricinfo records</a>
         </div>
         <div>
@@ -522,7 +522,7 @@ function App() {
             <div className="prepared-table" aria-hidden="true" />
           </div>
           <p className="link-line">
-            <strong>Raw data:</strong> <a href="https://api.cricapi.com/v1/currentMatches?apikey=aa7af3d9-ba4c-41bd-84c4-2956511902e4&offset=0" target="_blank" rel="noreferrer">CricAPI current matches endpoint</a>
+            <strong>Raw data:</strong> <a href="https://api.cricapi.com/v1/currentMatches?apikey=YOUR_API_KEY&offset=0" target="_blank" rel="noreferrer">CricAPI current matches endpoint</a>
           </p>
           <p className="link-line">
             <strong>Clean data:</strong> <a href="/cleaned-cricket-data.csv" download>Download cleaned dataset</a>
