@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
+import cricketPlayer from './assets/334647.jpg'
+import cricketCelebration from './assets/Screenshot 2026-09-20 214218.png'
 
 const tabs = [
   'Introduction',
@@ -274,7 +276,7 @@ function App() {
       <div className="intro-gallery">
         <figure className="intro-figure">
           <img
-            src="/src/assets/334647.jpg"
+            src={cricketPlayer}
             alt="Cricket player with protective gear"
           />
           <figcaption>Cricket combines athletic discipline, timing, and match pressure in every delivery.</figcaption>
@@ -282,7 +284,7 @@ function App() {
 
         <figure className="intro-figure">
           <img
-            src="/src/assets/Screenshot 2026-09-20 214218.png"
+            src={cricketCelebration}
             alt="Cricket team celebrating after winning"
           />
           <figcaption>Team coordination and momentum are central to how match outcomes unfold over time.</figcaption>
