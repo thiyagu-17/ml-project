@@ -1,34 +1,29 @@
-# Cricket Machine Learning Project Website
+# Cricket Machine Learning Project
 
-This project is a cricket-focused machine learning website built with React and Vite. It follows the academic project structure requested for an ML assignment and includes all required tabs: Introduction, DataPrep_EDA, Clustering, PCA, NaiveBayes, DecTrees, SVMs, Regression, NN, and Conclusions.
+A React and Vite project website documenting cricket data preparation, exploratory analysis, clustering, PCA, and SVD.
 
-## API and data focus
+## Run the website
 
-The project is designed around cricket data and uses a sports API approach for data collection. For local development, create a `.env.local` file in the project root with:
+```sh
+npm install
+npm run dev
+npm run build
+```
 
-VITE_CRICAPI_KEY=your_key_here
+## Reproduce the analysis
 
-A sample query structure is shown in the DataPrep/EDA tab and can be used with a sports API endpoint such as:
+Install the Python packages listed in `requirements.txt` and set `CRICAPI_KEY` in your local environment. Do not put the key in source files, public assets, or a `VITE_` variable. Then run:
 
-https://api.cricapi.com/v1/currentMatches?apikey=YOUR_API_KEY&offset=0
+```sh
+python public/analysis/analyze_cricket.py
+```
 
-Do not commit `.env.local` or any real API key to GitHub.
+The script fetches current-match data from CricAPI, writes the raw and cleaned CSV files under `public/`, and regenerates the metrics JSON and plots under `public/analysis/`. GitHub Pages serves these generated files as static assets and does not run the Python script or refresh API data. Run the script and deploy a new build to update the published data.
 
-## Getting started
+## Main files
 
-1. Install dependencies:
-   npm install
-2. Start the development server:
-   npm run dev
-3. Build for production:
-   npm run build
-
-## Project structure
-
-- src/App.jsx: main website content and tab layout
-- src/App.css: styling for the academic website
-- src/index.css: global site styles
-
-## Notes
-
-The project is ready to be customized further with real exported cricket CSV files, additional model notebooks, and a final polished academic report.
+- `src/App.jsx`: tabs, assignment text, data links, and analysis figures
+- `src/App.css`: project and responsive figure styling
+- `public/analysis/analyze_cricket.py`: cleaning, clustering, PCA/SVD, metrics, and plot generation
+- `public/analysis/results.json`: computed report consumed by the website
+- `public/raw-cricket-data.csv` and `public/cleaned-cricket-data.csv`: accessible input and cleaned sample

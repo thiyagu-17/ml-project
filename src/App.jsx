@@ -1,567 +1,283 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import './App.css'
 import cricketPlayer from './assets/334647.jpg'
 import cricketCelebration from './assets/Screenshot 2026-09-20 214218.png'
 
-const tabs = [
-  'Introduction',
-  'DataPrep/EDA',
-  'Clustering',
-  'PCA',
-  'NaiveBayes',
-  'DecTrees',
-  'SVMs',
-  'Regression',
-  'NN',
-  'Conclusions',
-]
-
-const CRICAPI_KEY = import.meta.env.VITE_CRICAPI_KEY || 'YOUR_API_KEY'
-const CRICAPI_BASE_URL = 'https://api.cricapi.com/v1'
+const tabs = ['Introduction', 'Data Prep & EDA', 'Clustering', 'PCA', 'NaiveBayes', 'DecTrees', 'Regression', 'AdaBoost', 'GradientBoosting', 'XGBoost', 'SVM', 'NN', 'Conclusions']
+const assetUrl = (path) => `${import.meta.env.BASE_URL}${path}`
 
 const introParagraphs = [
-  'Cricket is one of the most popular sports in the world, and its appeal stretches far beyond a single match. It brings together players, fans, coaches, and communities across many countries, giving the game strong cultural and social importance. In many places, cricket is tied to identity, tradition, and public pride, while also creating excitement around competition and performance. The sport is shaped by strategy, timing, and pressure, which makes each match feel both unpredictable and deeply structured. Small decisions in batting, bowling, and fielding can completely change the outcome of a game. This complexity is part of what makes cricket so engaging to watch and so interesting to study. It is not only a game of skill, but also a game of context, momentum, and decision-making. Because of this, cricket has become a powerful subject for analysis and discussion. It is a sport that connects entertainment, competition, and human performance in a meaningful way.',
-  'Cricket affects many groups of people beyond the players on the field. Families, schools, media outlets, and local communities often follow the sport closely, especially during major tournaments and international series. It creates opportunities in sports media, coaching, sponsorship, and local events, which makes it important economically and socially. At a youth level, the sport encourages teamwork, discipline, and physical activity, helping younger players build confidence and resilience. It also gives fans a shared experience, connecting generations through tradition, rivalry, and celebration. In this way, cricket is more than entertainment; it is part of social identity and community life for many people. The sport also generates strong interest in statistics, player form, and team performance, which adds another layer of engagement. This makes cricket both a cultural force and a data-rich subject. It remains one of the clearest examples of a sport where performance can be studied in detail and understood on a broader level.',
-  'The structure of cricket creates a constant balance between skill and pressure. Batters must make decisions under timing constraints, bowlers must control rhythm and variation, and fielders must react quickly to shifting game situations. Matches often change direction because of a single over, a strategic decision, or a player entering strong form. This makes the game exciting to follow, but it also means that performance is shaped by context rather than by a single statistic alone. Venue, format, and match stage can all influence how teams play. These features make cricket especially interesting for data analysis because many factors can contribute to the final outcome. A match may look simple at a glance, but it is full of layered decisions and changing conditions. That complexity is one reason cricket continues to attract attention from analysts and fans alike. It is a sport where understanding the broader pattern can reveal as much as understanding the final result.'
-]
-
-const introTitles = [
-  'Cricket as a Global Sport',
-  'Cricket\'s Social and Economic Impact',
-  'The Role of Skill, Pressure, and Context'
+  'I chose cricket because a match is shaped by more than the final score. Teams make decisions about batting, bowling, and field placement as conditions change, and those choices give the sport a useful connection to data analysis. Cricket also has a large following across different countries, so the game matters to players, supporters, and communities beyond the field.',
+  'For this project, I am interested in how live match records can be organized and explored with machine learning. I gathered current-match data from CricAPI, which provides team names, venues, dates, statuses, and score entries. The project uses those real match details to explore how similar matches cluster and how the key features can be reduced into a smaller set of components.',
+  'The current dataset is built from live cricket match records, cleaned and prepared for analysis. I extracted innings runs, wickets, overs, and run rate, then combined these values with match status, venue, teams, and match type for clustering, PCA, and SVD.'
 ]
 
 const questions = [
-  'Which batting statistics most strongly influence the likelihood of a team winning a match?',
-  'How do strike rate and run rate change under different phases of an innings?',
-  'Which bowling metrics are most useful for predicting pressure and wicket-taking success?',
-  'How do venue conditions affect match outcomes and scoring patterns?',
-  'Do teams with stronger powerplay performances have higher win probabilities?',
-  'Which player attributes contribute most to overall team success?',
-  'How does toss decision impact game outcome in different formats?',
-  'Can historical form and recent performance help predict future match results?',
-  'Which features are most important in separating winning and losing teams?',
-  'How does the value of a model change when using different cricket formats and conditions?'
+  'Which batting statistics are most closely related to match results?',
+  'How do strike rate and run rate vary across an innings?',
+  'Which bowling statistics best describe wicket-taking performance?',
+  'How do venues relate to scoring patterns?',
+  'Are strong powerplay scores associated with match wins?',
+  'Which player statistics are most useful for comparing performance?',
+  'How is the toss related to match outcomes?',
+  'Can recent results help describe a team\'s form?',
+  'Which match features best separate wins from losses?',
+  'Do these patterns differ across cricket formats?'
 ]
-
-const dataSources = [
-  {
-    name: 'CricAPI',
-    url: 'https://cricapi.com/',
-    type: 'API data source',
-    description: 'Live and historical cricket match data including fixtures, scores, player stats, and match summaries.'
-  },
-  {
-    name: 'ESPN Cricinfo',
-    url: 'https://www.espncricinfo.com/',
-    type: 'Public match records',
-    description: 'Match reports and structured historical statistics used for contextual research and validation.'
-  },
-  {
-    name: 'CricketArchive',
-    url: 'https://cricketarchive.com/',
-    type: 'Downloaded historical dataset',
-    description: 'Supplementary records for innings-level, player-level, and team-level analysis.'
-  },
-  {
-    name: 'Public cricket CSV data',
-    url: 'https://www.cricketarchive.com/',
-    type: 'Supplemental archive',
-    description: 'Additional historical match and player data used to build the cleaned project dataset.'
-  }
-]
-
-const chartCards = [
-  { title: 'Runs by over', text: 'Scoring patterns often show a clear change in pace during the middle overs and death overs.' },
-  { title: 'Wicket trend', text: 'The timing of wickets often reveals pressure shifts and momentum changes across innings.' },
-  { title: 'Win probability', text: 'Historical match data demonstrates how score, wickets, and required rate affect predicted outcomes.' },
-  { title: 'Player form', text: 'Recent run and wicket performance helps distinguish between stable and declining players.' },
-  { title: 'Venue effect', text: 'Pitch and venue conditions often alter scoring patterns and player performance across matches.' },
-  { title: 'Format comparison', text: 'T20, ODI, and Test cricket differ substantially in tempo, risk, and statistical structure.' },
-  { title: 'Strike rate bands', text: 'Higher scoring acceleration often distinguishes strong finishing phases from slow starts.' },
-  { title: 'Bowling economy', text: 'Bowling efficiency remains a key indicator of pressure control and match balance.' },
-  { title: 'Missing value review', text: 'Incomplete match records were checked to ensure features remained reliable and consistent.' },
-  { title: 'Outlier check', text: 'Extreme innings values were reviewed to avoid distortion from unusual match conditions.' }
-]
-
-const edaVisuals = [
-  {
-    title: 'Run rate trend',
-    type: 'bars',
-    labels: ['1', '2', '3', '4', '5', '6'],
-    values: [44, 58, 63, 71, 66, 79],
-    accent: '#67e8f9'
-  },
-  {
-    title: 'Wicket pressure',
-    type: 'line',
-    labels: ['0', '20', '40', '60', '80', '100'],
-    values: [12, 18, 28, 36, 42, 48],
-    accent: '#8b5cf6'
-  },
-  {
-    title: 'Venue mix',
-    type: 'donut',
-    labels: ['India', 'UK', 'Aus', 'Others'],
-    values: [42, 28, 20, 10],
-    accent: '#34d399'
-  }
-]
-
-const modelSections = {
-  Clustering: {
-    overview: 'Clustering groups similar match situations or player profiles to reveal behavioral patterns. In cricket, this can help identify aggressive batting clusters, pressure situations, or bowling archetypes.',
-    data: 'The clustering dataset includes match features such as runs, wickets, overs, powerplay score, bowling economy, venue, and match format. The data was standardized so scale differences did not distort the cluster grouping.',
-    code: 'Language: Python. Core packages: pandas, NumPy, scikit-learn, matplotlib. Code: notebook or Python script for KMeans or hierarchical clustering on cricket match features.',
-    results: 'The clusters reveal distinct performance patterns, such as high-pressure chases, controlled powerplays, and low-scoring defensive innings. These groups help explain different strategic styles across matches.'
-  },
-  PCA: {
-    overview: 'Principal Component Analysis reduces high-dimensional cricket data into a smaller set of meaningful components. This helps reveal the strongest patterns behind team and player performance.',
-    data: 'The PCA workflow used variables such as batting strike rate, bowling economy, boundary count, run rate, wickets, overs, and venue indicators. Correlated features were reviewed before reduction.',
-    code: 'Language: Python. Core packages: pandas, NumPy, scikit-learn, seaborn. Code: notebook showing PCA preprocessing and component interpretation for match data.',
-    results: 'The most important components highlight the dominant structure of match performance, especially score acceleration, wicket pressure, and venue-specific patterns. This supports easier interpretation of complex data without losing key detail.'
-  },
-  NaiveBayes: {
-    overview: 'Naive Bayes estimates probability-based class assignments and can function as a quick baseline for predicting match outcomes. It is useful when many features are available and a simple probabilistic model is needed.',
-    data: 'The dataset included labeled result categories such as win/loss, alongside features like run rate, wickets lost, target difference, venue, and recent form. The data used a cleaned feature matrix suitable for classification.',
-    code: 'Language: Python. Core packages: pandas, scikit-learn, matplotlib. Code: model notebook for Gaussian or multinomial Naive Bayes classification.',
-    results: 'The baseline model provides a fast view of how well simple probability assumptions explain cricket outcomes. It is useful as a benchmark before more flexible models are tested.'
-  },
-  DecTrees: {
-    overview: 'Decision Trees split the dataset into rule-based branches that are easy to interpret. In cricket, this can show which features most influence win probability or match outcome.',
-    data: 'The decision tree used cleaned cricket features including target score, wickets in hand, run rate, overs remaining, and venue conditions. The target variable was the final match result.',
-    code: 'Language: Python. Core packages: scikit-learn, pandas, matplotlib. Code: notebook for tree training and visualization of decision paths.',
-    results: 'The tree highlights key decision points such as required run rate, wickets remaining, and overs left. This makes the model interpretable and useful for discussing how results are shaped in real match conditions.'
-  },
-  SVMs: {
-    overview: 'Support Vector Machines use a margin-based approach to separate classes and are often effective when the data shows clear boundaries between outcomes. This helps classify match states or result classes.',
-    data: 'The SVM model used scaled features from the cricket dataset, including run rate, wickets, target differential, recent form, and venue effects. Scaling was important because the variables were not all measured on the same scale.',
-    code: 'Language: Python. Core packages: pandas, NumPy, scikit-learn. Code: notebook for feature scaling, training, and hyperparameter tuning of the SVM model.',
-    results: 'The SVM produced a competitive classification baseline and showed where stronger margins separate winning and losing situations. This helped assess whether match outcomes are strongly separable or require more flexible models.'
-  },
-  Regression: {
-    overview: 'Regression models estimate a continuous target, such as final score, margin of victory, or win probability. In cricket, regression is useful for understanding how continuous match statistics drive final outcomes.',
-    data: 'The regression model used numeric features such as runs scored, wickets lost, overs remaining, strike rate, economy rate, and venue variables. The target variable varied depending on the analytic question being tested.',
-    code: 'Language: Python. Core packages: pandas, scikit-learn, statsmodels, seaborn. Code: notebook for building and validating the regression model.',
-    results: 'The regression outputs reveal which variables most strongly affect final score or match margin. This gives clearer insight into how performance indicators create measurable shifts in outcomes.'
-  },
-  NN: {
-    overview: 'Neural networks are useful when the relationship between cricket features and outcomes is nonlinear and complex. This method can capture interactions between variables such as powerplay score, pressure index, and venue conditions.',
-    data: 'The neural network dataset included scaled match and player indicators, recent form metrics, environmental factors, and performance features. The data was normalized to support stable model training.',
-    code: 'Language: Python. Core packages: TensorFlow or PyTorch, scikit-learn, pandas, NumPy. Code: model training notebook for a multilayer perceptron or similar architecture.',
-    results: 'The neural network captured subtle interactions in the data and showed where nonlinear patterns explain match outcomes better than simpler methods. This supports the idea that deeper models can add value when the relationship is more complex.'
-  }
-}
-
-const fallbackMatches = [
-  {
-    name: 'India vs Australia',
-    status: 'Live',
-    venue: 'Mumbai',
-    team1: 'India',
-    team2: 'Australia',
-    date: 'Today'
-  },
-  {
-    name: 'England vs South Africa',
-    status: 'Scheduled',
-    venue: 'London',
-    team1: 'England',
-    team2: 'South Africa',
-    date: 'Tomorrow'
-  },
-  {
-    name: 'Pakistan vs New Zealand',
-    status: 'Completed',
-    venue: 'Lahore',
-    team1: 'Pakistan',
-    team2: 'New Zealand',
-    date: 'Yesterday'
-  }
-]
-
-const apiExample = 'https://api.cricapi.com/v1/currentMatches?apikey=YOUR_KEY&offset=0'
 
 function App() {
   const [activeTab, setActiveTab] = useState('Introduction')
-  const [liveMatches, setLiveMatches] = useState([])
-  const [apiStatus, setApiStatus] = useState('idle')
-  const [apiError, setApiError] = useState('')
-  const [bannerMessage, setBannerMessage] = useState('')
+  const [report, setReport] = useState(null)
+  const [reportError, setReportError] = useState('')
 
   useEffect(() => {
-    const hideBanner = () => setBannerMessage('')
-
-    document.addEventListener('click', hideBanner)
-
-    return () => {
-      document.removeEventListener('click', hideBanner)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (activeTab !== 'DataPrep/EDA') {
-      return undefined
-    }
-
     let cancelled = false
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 15000)
 
-    const fetchLiveMatches = async () => {
-      setApiStatus('loading')
-      setApiError('')
-
-      try {
-        const endpoint = `${CRICAPI_BASE_URL}/currentMatches?apikey=${encodeURIComponent(CRICAPI_KEY)}&offset=0`
-        const response = await fetch(endpoint, {
-          signal: controller.signal,
-          headers: {
-            Accept: 'application/json'
-          }
-        })
-
-        if (!response.ok) {
-          throw new Error(`Request failed with status ${response.status}`)
-        }
-
-        const payload = await response.json()
-
-        if (!payload || payload.status !== 'success' || !Array.isArray(payload.data)) {
-          throw new Error('CricAPI did not return valid match data.')
-        }
-
-        const normalizedMatches = payload.data.slice(0, 6).map((match) => ({
-          name: match.name || 'Cricket Match',
-          status: match.status || 'Unknown status',
-          venue: match.venue || 'Venue unavailable',
-          team1: match.team1 || 'Team 1',
-          team2: match.team2 || 'Team 2',
-          date: match.date || 'Date unavailable'
-        }))
-
-        if (!cancelled) {
-          setLiveMatches(normalizedMatches)
-          setApiStatus('success')
-        }
-      } catch (error) {
-        if (cancelled || error.name === 'AbortError') {
-          return
-        }
-
-        if (!cancelled) {
-          setLiveMatches(fallbackMatches)
-          setApiStatus('error')
-          setApiError('Live CricAPI request failed. Showing safe fallback demo data for GitHub Pages hosting.')
-        }
-      } finally {
-        if (!cancelled) {
-          clearTimeout(timeoutId)
-        }
-      }
-    }
-
-    fetchLiveMatches()
+    fetch(assetUrl('analysis/results.json'))
+      .then((response) => {
+        if (!response.ok) throw new Error(`Analysis report returned ${response.status}`)
+        return response.json()
+      })
+      .then((data) => {
+        if (!cancelled) setReport(data)
+      })
+      .catch(() => {
+        if (!cancelled) setReportError('The analysis results could not be loaded.')
+      })
 
     return () => {
       cancelled = true
-      clearTimeout(timeoutId)
-      controller.abort()
     }
-  }, [activeTab])
+  }, [])
 
-  const summary = useMemo(() => {
-    const totalMatches = liveMatches.length || fallbackMatches.length
-    const activeMatches = liveMatches.filter((match) => /live|in progress|playing/i.test(match.status)).length
-    const venues = [...new Set(liveMatches.map((match) => match.venue).filter(Boolean))]
-
-    return {
-      totalMatches,
-      activeMatches,
-      distinctVenues: venues.length
-    }
-  }, [liveMatches])
-
-  const renderIntro = () => (
+  const renderIntroduction = () => (
     <section className="content-panel">
       <div className="text-block">
-        {introParagraphs.map((paragraph, index) => (
-          <details key={paragraph} className="intro-disclosure">
-            <summary>{introTitles[index]}</summary>
-            <p>{paragraph}</p>
-          </details>
-        ))}
+        {introParagraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
       </div>
-
       <div className="intro-gallery">
         <figure className="intro-figure">
-          <img
-            src={cricketPlayer}
-            alt="Cricket player with protective gear"
-          />
-          <figcaption>Cricket combines athletic discipline, timing, and match pressure in every delivery.</figcaption>
+          <img src={cricketPlayer} alt="Cricket player preparing to bat" />
+          <figcaption>Batting depends on timing, judgment, and adapting to each delivery.</figcaption>
         </figure>
-
         <figure className="intro-figure">
-          <img
-            src={cricketCelebration}
-            alt="Cricket team celebrating after winning"
-          />
-          <figcaption>Team coordination and momentum are central to how match outcomes unfold over time.</figcaption>
+          <img src={cricketCelebration} alt="Cricket players celebrating together" />
+          <figcaption>Players rely on coordination as a match changes around them.</figcaption>
         </figure>
       </div>
-
       <div className="questions-box">
-        <h3>Questions to investigate</h3>
-        <ol>
-          {questions.map((question) => (
-            <li key={question}>{question}</li>
-          ))}
-        </ol>
+        <h3>Questions for further study</h3>
+        <ol>{questions.map((question) => <li key={question}>{question}</li>)}</ol>
       </div>
     </section>
   )
 
-  const renderDataPrep = () => (
-    <section className="content-panel">
-      <div className="section-summary">
-        <p>
-          The data collection process for this project relies on cricket match data gathered through a public API and supplemented by historical records from public sports datasets. The project emphasizes both quality and scope because meaningful cricket analysis requires consistent match records, player-level features, and format-aware context.
-        </p>
-      </div>
-
-      <div className="summary-grid">
-        <div className="summary-card">
-          <span>Total matches</span>
-          <strong>{summary.totalMatches}</strong>
-        </div>
-        <div className="summary-card">
-          <span>Active matches</span>
-          <strong>{summary.activeMatches}</strong>
-        </div>
-        <div className="summary-card">
-          <span>Distinct venues</span>
-          <strong>{summary.distinctVenues}</strong>
-        </div>
-      </div>
-
-      <div className="eda-viz-grid">
-        {edaVisuals.map((viz) => (
-          <div key={viz.title} className="eda-viz-card">
-            <div className="viz-header">
-              <h3>{viz.title}</h3>
-              <span>{viz.type === 'donut' ? 'Venue mix' : 'Match trend'}</span>
-            </div>
-
-            {viz.type === 'bars' && (
-              <div className="bar-chart" aria-label={`${viz.title} bar chart`}>
-                {viz.values.map((value, index) => (
-                  <div key={`${viz.title}-${index}`} className="bar-wrap">
-                    <span className="bar" style={{ height: `${Math.max(value, 18)}%`, background: viz.accent }} />
-                    <small>{viz.labels[index]}</small>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {viz.type === 'line' && (
-              <svg viewBox="0 0 220 120" className="line-chart" role="img" aria-label={`${viz.title} line chart`}>
-                <path
-                  d={viz.values.map((value, index) => `${index === 0 ? 'M' : 'L'} ${index * 40 + 10} ${120 - value * 2}`).join(' ')}
-                  fill="none"
-                  stroke={viz.accent}
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                />
-                {viz.values.map((value, index) => (
-                  <circle key={`${viz.title}-dot-${index}`} cx={index * 40 + 10} cy={120 - value * 2} r="3.5" fill={viz.accent} />
-                ))}
-              </svg>
-            )}
-
-            {viz.type === 'donut' && (
-              <div className="donut-wrap">
-                <svg viewBox="0 0 120 120" className="donut-chart" role="img" aria-label={`${viz.title} donut chart`}>
-                  <circle cx="60" cy="60" r="32" fill="none" stroke="rgba(148,163,184,0.2)" strokeWidth="12" />
-                  <circle
-                    cx="60"
-                    cy="60"
-                    r="32"
-                    fill="none"
-                    stroke={viz.accent}
-                    strokeWidth="12"
-                    strokeDasharray="98 100"
-                    strokeDashoffset="0"
-                    transform="rotate(-90 60 60)"
-                  />
-                  <circle
-                    cx="60"
-                    cy="60"
-                    r="32"
-                    fill="none"
-                    stroke="#8b5cf6"
-                    strokeWidth="12"
-                    strokeDasharray="66 100"
-                    strokeDashoffset="-98"
-                    transform="rotate(-90 60 60)"
-                  />
-                  <circle
-                    cx="60"
-                    cy="60"
-                    r="32"
-                    fill="none"
-                    stroke="#f59e0b"
-                    strokeWidth="12"
-                    strokeDasharray="44 100"
-                    strokeDashoffset="-164"
-                    transform="rotate(-90 60 60)"
-                  />
-                </svg>
-                <ul className="legend-list">
-                  {viz.labels.map((label, index) => (
-                    <li key={`${viz.title}-legend-${label}`}>
-                      <span className="legend-dot" style={{ background: ['#67e8f9', '#8b5cf6', '#f59e0b', '#34d399'][index] }} />
-                      {label}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-
-      <div className="source-grid">
-        {dataSources.map((source) => (
-          <a key={source.name} href={source.url} target="_blank" rel="noreferrer" className="source-card">
-            <span className="source-type">{source.type}</span>
-            <h3>{source.name}</h3>
-            <p>{source.description}</p>
-          </a>
-        ))}
-      </div>
-
-      <div className="api-box">
-        <div className="api-header-row">
-          <h3>Primary API source</h3>
-          <span className={`status-badge ${apiStatus}`}>{apiStatus}</span>
-        </div>
-        <p><strong>Website:</strong> <a href="https://cricapi.com/" target="_blank" rel="noreferrer">CricAPI</a></p>
-        <p><strong>Endpoint:</strong> /v1/currentMatches</p>
-        <code>{apiExample}</code>
-        <p className="api-note">For static hosting, the API request is executed from the browser with a guarded fetch flow and a safe fallback when the live request is unavailable.</p>
-        {apiError ? <p className="api-error">{apiError}</p> : null}
-      </div>
-
-      <div className="data-links-row">
-        <div className="data-download-card">
-          <h3>Raw data</h3>
-          <a href="https://api.cricapi.com/v1/currentMatches?apikey=YOUR_API_KEY&offset=0" target="_blank" rel="noreferrer">CricAPI live match feed</a>
-        </div>
-        <div className="data-download-card">
-          <h3>Cleaned data</h3>
-          <a href="/cleaned-cricket-data.csv" download>Download cleaned cricket dataset</a>
-        </div>
-      </div>
-
-      <div className="live-panel">
-        <h3>Live match snapshot</h3>
-        <div className="match-list">
-          {liveMatches.map((match) => (
-            <div key={`${match.name}-${match.venue}`} className="match-item">
-              <div>
-                <strong>{match.name}</strong>
-                <span>{match.team1} vs {match.team2}</span>
-              </div>
-              <div className="meta-block">
-                <span>{match.status}</span>
-                <small>{match.venue}</small>
-                <small>{match.date}</small>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="raw-clean-grid">
-        <figure className="figure-card">
-          <div className="figure-graphic raw-table" aria-hidden="true" />
-          <figcaption>Raw cricket match data before cleaning: incomplete records, inconsistent formatting, and mixed match details from multiple sources.</figcaption>
-        </figure>
-        <figure className="figure-card">
-          <div className="figure-graphic clean-table" aria-hidden="true" />
-          <figcaption>Cleaned match dataset: standardized columns, corrected formats, and prepared features for machine learning analysis.</figcaption>
-        </figure>
-      </div>
-
-      <div className="chart-grid">
-        {chartCards.map((card) => (
-          <figure key={card.title} className="chart-card">
-            <div className="mini-chart mini-chart-one" aria-hidden="true" />
-            <h4>{card.title}</h4>
-            <p>{card.text}</p>
-          </figure>
-        ))}
-      </div>
-
-      <div className="data-links">
-        <div>
-          <h3>Raw data</h3>
-          <a href="https://api.cricapi.com/v1/currentMatches?apikey=YOUR_API_KEY&offset=0" target="_blank" rel="noreferrer">CricAPI current matches endpoint</a>
-          <a href="https://www.espncricinfo.com/" target="_blank" rel="noreferrer">ESPN Cricinfo records</a>
-        </div>
-        <div>
-          <h3>Cleaned data</h3>
-          <a href="/cleaned-cricket-data.csv" download>Cleaned match dataset</a>
-          <a href="https://cricketarchive.com/" target="_blank" rel="noreferrer">Historical archive records</a>
-        </div>
-      </div>
-    </section>
-  )
-
-  const renderModelTab = (modelName) => {
-    const section = modelSections[modelName]
+  const renderDataPrep = () => {
+    const data = report?.dataset
 
     return (
       <section className="content-panel">
-        <div className="model-header">
-          <div>
-            <span className="eyebrow">{modelName}</span>
-            <h3>{modelName}</h3>
+        <div className="section-summary">
+          <p>I used live current-match cricket data from CricAPI, which includes match status, team names, venue, date, and innings score details. The data was cleaned, standardized, and reduced to meaningful fields for clustering and PCA. The charts below show the cleaned API-derived sample and the feature matrix used for later unsupervised learning.</p>
+        </div>
+
+        <div className="summary-grid">
+          <div className="summary-card"><span>Records</span><strong>{data?.records ?? '—'}</strong></div>
+          <div className="summary-card"><span>Match statuses</span><strong>{data ? Object.keys(data.status_counts).length : '—'}</strong></div>
+          <div className="summary-card"><span>Venues</span><strong>{data ? Object.keys(data.venue_counts).length : '—'}</strong></div>
+        </div>
+
+        <div className="data-links-row">
+          <div className="data-download-card">
+            <h3>Raw data</h3>
+            <a href={assetUrl('raw-cricket-data.csv')} download>Open raw CSV</a>
           </div>
-          <div className="model-graphic" aria-hidden="true" />
-        </div>
-
-        <div className="model-section-block">
-          <h4>Overview</h4>
-          <p>{section.overview}</p>
-        </div>
-
-        <div className="model-section-block">
-          <h4>Data</h4>
-          <p>{section.data}</p>
-          <div className="prepared-data-box">
-            <div className="prepared-table" aria-hidden="true" />
+          <div className="data-download-card">
+            <h3>Cleaned data</h3>
+            <a href={assetUrl('cleaned-cricket-data.csv')} download>Open cleaned CSV</a>
           </div>
-          <p className="link-line">
-            <strong>Raw data:</strong> <a href="https://api.cricapi.com/v1/currentMatches?apikey=YOUR_API_KEY&offset=0" target="_blank" rel="noreferrer">CricAPI current matches endpoint</a>
-          </p>
-          <p className="link-line">
-            <strong>Clean data:</strong> <a href="/cleaned-cricket-data.csv" download>Download cleaned dataset</a>
-          </p>
+          <div className="data-download-card">
+            <h3>API source</h3>
+            <a href="https://api.cricapi.com/v1/currentMatches" target="_blank" rel="noreferrer">CricAPI current matches</a>
+          </div>
+          <div className="data-download-card">
+            <h3>Analysis code</h3>
+            <a href={assetUrl('analysis/analyze_cricket.py')} download>Python script</a>
+          </div>
         </div>
 
-        <div className="model-section-block">
-          <h4>Code</h4>
-          <p>{section.code}</p>
-          <span className="code-link">Python project notebook prepared for this analysis</span>
+        <div className="analysis-figure-grid">
+          <figure className="figure-card">
+            <img src={assetUrl('analysis/status-counts.png')} alt="Bar chart of sample match counts by status" />
+            <figcaption>Figure 1: Match status counts from the cleaned sample.</figcaption>
+          </figure>
+          <figure className="figure-card">
+            <img src={assetUrl('analysis/venue-counts.png')} alt="Bar chart of sample match counts by venue" />
+            <figcaption>Figure 2: Venue distribution across the current API records.</figcaption>
+          </figure>
+          <figure className="figure-card">
+            <img src={assetUrl('analysis/encoded-feature-sample.png')} alt="Encoded feature matrix built from API match records" />
+            <figcaption>Figure 3: Encoded numeric feature sample used in clustering and PCA.</figcaption>
+          </figure>
+          <figure className="figure-card">
+            <img src={assetUrl('analysis/silhouette-comparison.png')} alt="Silhouette comparison by cluster count" />
+            <figcaption>Figure 4: Silhouette comparison across the tested cluster counts.</figcaption>
+          </figure>
+          <figure className="figure-card">
+            <img src={assetUrl('analysis/cluster-map.png')} alt="Cluster assignments projected in PC space" />
+            <figcaption>Figure 5: K-means assignments projected onto the first two principal components.</figcaption>
+          </figure>
+          <figure className="figure-card">
+            <img src={assetUrl('analysis/dendrogram.png')} alt="Dendrogram for hierarchical clustering" />
+            <figcaption>Figure 6: Average-linkage dendrogram using cosine distance.</figcaption>
+          </figure>
+          <figure className="figure-card">
+            <img src={assetUrl('analysis/pca-scree.png')} alt="PCA explained variance scree plot" />
+            <figcaption>Figure 7: PCA explained-variance chart showing variance by component.</figcaption>
+          </figure>
+          <figure className="figure-card">
+            <img src={assetUrl('analysis/pca-biplot.png')} alt="PCA biplot with score points and loading directions" />
+            <figcaption>Figure 8: PCA biplot summarizing the match positions and feature loadings.</figcaption>
+          </figure>
+          <figure className="figure-card">
+            <img src={assetUrl('analysis/svd-spectrum.png')} alt="Singular value spectrum" />
+            <figcaption>Figure 9: SVD singular-value spectrum for the uncentered feature matrix.</figcaption>
+          </figure>
+          <figure className="figure-card">
+            <img src={assetUrl('analysis/svd-projection.png')} alt="Rank-two SVD projection" />
+            <figcaption>Figure 10: Two-dimensional SVD projection of the sample records.</figcaption>
+          </figure>
         </div>
 
-        <div className="model-section-block">
-          <h4>Results</h4>
-          <p>{section.results}</p>
-          <div className="results-visual" aria-hidden="true" />
+        <div className="data-preview">
+          <h3>Cleaned API records</h3>
+          <div className="table-scroll">
+            <table>
+              <thead><tr><th>Match</th><th>Status</th><th>Venue</th><th>Date</th></tr></thead>
+              <tbody>
+                {(data?.preview_rows ?? []).map((row) => (
+                  <tr key={row.match_name}><td>{row.match_name}</td><td>{row.status}</td><td>{row.venue}</td><td>{row.date}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
+      </section>
+    )
+  }
+
+  const renderClustering = () => {
+    const results = report?.clustering
+    const data = report?.dataset
+    const bestKMeans = results?.kmeans.find((item) => item.k === results.kmeans_best_k)
+    const bestHierarchical = results?.hierarchical.find((item) => item.k === results.hierarchical_best_k)
+
+    return (
+      <section className="content-panel assignment-panel">
+        <header className="assignment-heading">
+          <span className="eyebrow">Unsupervised learning</span>
+          <h2>Clustering</h2>
+          <p>Grouping match records without an outcome label.</p>
+        </header>
+
+        <section className="assignment-section">
+          <h3>Overview</h3>
+          <p>Clustering groups observations by similarity without using a known class label. Partitional methods such as k-means assign each row to one of k groups, minimizing within-group squared Euclidean distance. Hierarchical clustering builds a tree of merges. I used average linkage with cosine distance, which measures the angle between feature vectors rather than their magnitude.</p>
+          <p>I compared match status, venue, teams, match type, and innings score summaries. The silhouette score compares how close each record is to its own group and to other groups. These are match-level records, so the results describe this API snapshot rather than individual player performance.</p>
+          <div className="analysis-figure-grid">
+            <figure className="figure-card"><img src={assetUrl('analysis/cluster-map.png')} alt="K-means groups projected onto the first two principal components" /><figcaption>K-means assignments shown in the first two principal components.</figcaption></figure>
+            <figure className="figure-card"><img src={assetUrl('analysis/dendrogram.png')} alt="Average-linkage hierarchical dendrogram using cosine distance" /><figcaption>Hierarchical merges using cosine distance.</figcaption></figure>
+          </div>
+        </section>
+
+        <section className="assignment-section">
+          <h3>Data Prep</h3>
+          <p>Clustering uses unlabeled numeric data. I combined innings runs, wickets, overs, and run rate with one-hot encoded status, venue, team, and match-type fields, producing {data?.numeric_features ?? '—'} input columns. Match name and date are shown in the table but are not model inputs. The numeric values are not scaled, so larger score values can have more influence on distances.</p>
+          <div className="data-action-row"><a href={assetUrl('raw-cricket-data.csv')} download>Raw CSV</a><a href={assetUrl('cleaned-cricket-data.csv')} download>Cleaned CSV</a><a href={assetUrl('analysis/encoded-feature-sample.png')} target="_blank" rel="noreferrer">Feature matrix image</a></div>
+          <figure className="figure-card sample-figure"><img src={assetUrl('analysis/encoded-feature-sample.png')} alt="Preview of one-hot encoded numeric clustering features" /><figcaption>Encoded model input: {data?.records ?? '—'} records and {data?.numeric_features ?? '—'} numeric features.</figcaption></figure>
+        </section>
+
+        <section className="assignment-section">
+          <h3>Code</h3>
+          <p>The Python script fetches the current CricAPI records, cleans the fields, creates the feature matrix, and compares k-means with average-linkage hierarchical clustering using cosine distance.</p>
+          <a className="code-download" href={assetUrl('analysis/analyze_cricket.py')} download>Python analysis script</a>
+        </section>
+
+        <section className="assignment-section">
+          <h3>Results</h3>
+          {results ? <>
+            <div className="metric-strip"><div><span>K-means best k</span><strong>{results.kmeans_best_k}</strong></div><div><span>Hierarchical best k</span><strong>{results.hierarchical_best_k}</strong></div><div><span>Hierarchical groups</span><strong>{results.hierarchical_cluster_count ?? results.hierarchical_best_k}</strong></div><div><span>Adjusted Rand index</span><strong>{results.best_solution_adjusted_rand_index.toFixed(2)}</strong></div></div>
+            <p>The highest k-means silhouette was {bestKMeans.silhouette.toFixed(3)} at k={bestKMeans.k}. The highest hierarchical silhouette was {bestHierarchical.silhouette.toFixed(3)} at k={bestHierarchical.k}. The adjusted Rand index was {results.best_solution_adjusted_rand_index.toFixed(2)}, which summarizes how closely the two selected groupings agree. These results describe the current API records, not stable categories across cricket matches.</p>
+            <div className="analysis-figure-grid">
+              <figure className="figure-card"><img src={assetUrl('analysis/silhouette-comparison.png')} alt="Silhouette scores at k equals 2, 3, and 4 for both clustering methods" /><figcaption>Silhouette scores for k=2, 3, and 4.</figcaption></figure>
+              <figure className="figure-card"><img src={assetUrl('analysis/cluster-map.png')} alt="Scatter plot of matches colored by k-means cluster" /><figcaption>Cluster assignments projected onto two principal components.</figcaption></figure>
+              <figure className="figure-card wide-figure"><img src={assetUrl('analysis/dendrogram.png')} alt="Cosine-distance hierarchical clustering dendrogram" /><figcaption>The dendrogram shows how the current API records merge under average linkage.</figcaption></figure>
+            </div>
+          </> : <p role="status">{reportError || 'Loading clustering results.'}</p>}
+        </section>
+
+        <section className="assignment-section">
+          <h3>Conclusions</h3>
+          <p>The cluster assignments summarize similarities among the current API records. Because the sample changes with the live endpoint and combines team, venue, status, and score-summary fields, the groups should be interpreted only as patterns in this snapshot.</p>
+        </section>
+      </section>
+    )
+  }
+
+  const renderPca = () => {
+    const results = report?.pca
+    const data = report?.dataset
+    const firstTwoVariance = results?.cumulative_variance_ratio[1]
+    const firstFiveVariance = results?.cumulative_variance_ratio[4]
+
+    return (
+      <section className="content-panel assignment-panel">
+        <header className="assignment-heading">
+          <span className="eyebrow">Dimensionality reduction</span>
+          <h2>PCA and SVD</h2>
+          <p>Reducing the feature matrix and inspecting its main directions.</p>
+        </header>
+
+        <section className="assignment-section">
+          <h3>Overview</h3>
+          <p>Principal Component Analysis (PCA) replaces the original variables with ordered, perpendicular directions called principal components. An eigenvector gives a component's direction in the feature space, and its eigenvalue measures the variance along that direction. The first component captures the most variance; each following component captures as much as possible without repeating the earlier directions.</p>
+          <p>Dimensionality reduction represents many variables with fewer components, which can make analysis and visualization easier, but it also discards information. The current sample has many one-hot columns relative to its number of records. PCA centers the columns but does not standardize their scales, so the larger-range score values can dominate the components. In the biplot, points are match scores on the first two components and arrows show selected variable loadings.</p>
+          <div className="analysis-figure-grid">
+            <figure className="figure-card"><img src={assetUrl('analysis/pca-scree.png')} alt="PCA individual and cumulative explained variance by component" /><figcaption>Variance explained by each component and cumulatively.</figcaption></figure>
+            <figure className="figure-card"><img src={assetUrl('analysis/pca-biplot.png')} alt="PCA scores and selected one-hot feature loading vectors" /><figcaption>Match scores and selected variable loading directions.</figcaption></figure>
+          </div>
+        </section>
+
+        <section className="assignment-section">
+          <h3>Data Prep</h3>
+          <p>PCA requires numeric observations with the same set of columns. I used the one-hot encoded matrix of {data?.numeric_features ?? '—'} features, with no labels. PCA centers the columns before decomposition. The sample is small relative to its number of features.</p>
+          <div className="data-action-row"><a href={assetUrl('raw-cricket-data.csv')} download>Raw CSV</a><a href={assetUrl('cleaned-cricket-data.csv')} download>Cleaned CSV</a><a href={assetUrl('analysis/encoded-feature-sample.png')} target="_blank" rel="noreferrer">Feature matrix image</a></div>
+          <figure className="figure-card sample-figure"><img src={assetUrl('analysis/encoded-feature-sample.png')} alt="Preview of the numeric matrix used for PCA and SVD" /><figcaption>Input matrix: {data?.records ?? '—'} matches by {data?.numeric_features ?? '—'} features.</figcaption></figure>
+        </section>
+
+        <section className="assignment-section">
+          <h3>Code</h3>
+          <p>The script applies scikit-learn PCA to the centered feature matrix and NumPy singular value decomposition to the uncentered matrix. The SVD spectrum is not the PCA variance spectrum because the input is not centered first.</p>
+          <a className="code-download" href={assetUrl('analysis/analyze_cricket.py')} download>Python analysis script</a>
+        </section>
+
+        <section className="assignment-section">
+          <h3>Results</h3>
+          {results ? <>
+            <p>PC1 explains {(results.explained_variance_ratio[0] * 100).toFixed(1)}% of the variance, and the first two components explain {(firstTwoVariance * 100).toFixed(1)}%. The first five explain {(firstFiveVariance * 100).toFixed(1)}%. The biplot places each match by its first two component scores; loading arrows show which variables contribute to those directions. The largest absolute PC1 loadings are {results.top_pc1_loadings.map(([name]) => name.replace('status_', 'status: ').replace('venue_', 'venue: ').replace('team_1_', 'team 1: ').replace('team_2_', 'team 2: ')).join(', ')}.</p>
+            <div className="analysis-figure-grid">
+              <figure className="figure-card"><img src={assetUrl('analysis/pca-scree.png')} alt="Scree plot with individual and cumulative PCA variance" /><figcaption>The scree plot shows individual and cumulative explained variance.</figcaption></figure>
+              <figure className="figure-card"><img src={assetUrl('analysis/pca-biplot.png')} alt="PCA biplot of match scores and variable loadings" /><figcaption>The biplot relates match positions to selected feature directions.</figcaption></figure>
+              <figure className="figure-card"><img src={assetUrl('analysis/svd-spectrum.png')} alt="Singular values of the one-hot feature matrix" /><figcaption>Singular values from SVD of the uncentered matrix.</figcaption></figure>
+              <figure className="figure-card"><img src={assetUrl('analysis/svd-projection.png')} alt="Rank-two SVD projection of the match sample" /><figcaption>Rank-two SVD projection using the two largest singular directions.</figcaption></figure>
+            </div>
+          </> : <p role="status">{reportError || 'Loading PCA and SVD results.'}</p>}
+        </section>
+
+        <section className="assignment-section">
+          <h3>Conclusions</h3>
+          <p>The first two components retain {(firstTwoVariance * 100).toFixed(1)}% of the variance in this dataset. The loadings show which input features contribute to the component directions; they do not establish player or team performance. These results describe the current API snapshot, and the unscaled numeric features should be considered when interpreting the projection.</p>
+        </section>
       </section>
     )
   }
@@ -569,89 +285,64 @@ function App() {
   const renderConclusions = () => (
     <section className="content-panel">
       <div className="text-block">
-        <p>
-          The findings from this project show that cricket is much more than a game of individual moments and highlight reels. It is a sport shaped by strategy, pressure, skill, and context, all of which can be explored through careful data analysis. By examining patterns in runs, wickets, venue conditions, and match timing, the project helps reveal how performance is shaped over the course of a game. These patterns make the sport more understandable and help connect the excitement of the match to the structure behind it.
-        </p>
-        <p>
-          The project also shows that cricket is highly sensitive to context. Different formats, different venues, and different phases of the game create very different challenges for teams and players. A team that performs strongly in the powerplay may struggle later in a chase, while a bowler who is effective in one format may not have the same impact in another. These differences are part of what makes the sport rich and complex, and they also explain why data analysis can be so useful when studying match outcomes and player performance.
-        </p>
-        <p>
-          Another important takeaway is that cricket thrives on a balance between talent and preparation. Skilled players still depend on conditions, decisions, and tactical pressure, while teams benefit from understanding performance patterns over time. This makes data analysis valuable not only for technical evaluation but also for building a deeper appreciation of how the sport works. It shows that hard work and strategy matter just as much as raw skill, and that numbers can help tell a more complete story about the game.
-        </p>
-        <p>
-          The broader message of this project is that sports data can be used to improve understanding without taking away the excitement of the game. Instead, analysis can help explain why certain performances matter, how strategic choices shift momentum, and what patterns show up across many matches. That gives fans, players, and analysts a stronger way to connect with the sport while still celebrating the human side of competition. Cricket remains emotional and unpredictable, but the data helps show what lies beneath the drama.
-        </p>
-        <p>
-          In the end, the project supports a larger understanding of cricket as both a competitive sport and a rich source of data. The game offers countless stories, moments, and patterns that can be studied with care and communicated clearly. By making those patterns visible, the project contributes to a more informed appreciation of cricket and the many factors that shape success on the field.
-        </p>
+        <p>I used live CricAPI match records and analyzed their teams, venues, statuses, match types, and innings score summaries. The clustering and dimensionality-reduction results describe the records returned at the time of analysis.</p>
+        <p>The dataset contains match-level summaries, not ball-by-ball or player-level performance. The sample can also change as current matches change, so the results should not be generalized beyond this snapshot.</p>
       </div>
-
       <div className="image-grid single-image">
         <figure className="figure-card">
-          <div className="figure-graphic city-graphic" aria-hidden="true" />
-          <figcaption>Cricket brings together performance, preparation, and public excitement in a way that is easy to follow and rich for analysis.</figcaption>
+          <img src={cricketCelebration} alt="Cricket players celebrating together" />
+          <figcaption>The analysis is limited to the match-level fields returned by the current API.</figcaption>
         </figure>
       </div>
     </section>
   )
 
+  const renderPlaceholderTab = (tabLabel) => (
+    <section className="content-panel assignment-panel">
+      <header className="assignment-heading">
+        <span className="eyebrow">Work in progress</span>
+        <h2>{tabLabel}</h2>
+        <p>This tab is included in the project structure, and the method will be developed in a later phase of the assignment.</p>
+      </header>
+      <div className="section-summary">
+        <p>Work in progress for the next phases of the project. This placeholder keeps the required navigation complete without adding unrelated models or datasets.</p>
+      </div>
+    </section>
+  )
+
   const renderTab = () => {
-    if (activeTab === 'Introduction') return renderIntro()
-    if (activeTab === 'DataPrep/EDA') return renderDataPrep()
-    if (activeTab === 'Conclusions') return renderConclusions()
-    return renderModelTab(activeTab)
+    if (activeTab === 'Introduction') return renderIntroduction()
+    if (activeTab === 'Data Prep & EDA') return renderDataPrep()
+    if (activeTab === 'Clustering') return renderClustering()
+    if (activeTab === 'PCA') return renderPca()
+    if (activeTab === 'NaiveBayes') return renderPlaceholderTab('Naive Bayes')
+    if (activeTab === 'DecTrees') return renderPlaceholderTab('Decision Trees')
+    if (activeTab === 'Regression') return renderPlaceholderTab('Regression')
+    if (activeTab === 'AdaBoost') return renderPlaceholderTab('AdaBoost')
+    if (activeTab === 'GradientBoosting') return renderPlaceholderTab('Gradient Boosting')
+    if (activeTab === 'XGBoost') return renderPlaceholderTab('XGBoost')
+    if (activeTab === 'SVM') return renderPlaceholderTab('SVM')
+    if (activeTab === 'NN') return renderPlaceholderTab('Neural Networks')
+    return renderConclusions()
   }
 
   return (
-    <>
-      <div className="top-banner" aria-label="Project highlights">
-        <div className="top-banner-inner">
-          {['Cricket ML', 'Match Analytics', 'Feature Engineering', 'Prediction Models'].map((label) => (
-            <button
-              key={label}
-              type="button"
-              className="banner-pill"
-              onClick={(event) => {
-                event.stopPropagation()
-                setBannerMessage(`${label}: Coming soon`)
-              }}
-            >
-              {label}
+    <div className="page-shell sidebar-layout">
+      <aside className="sidebar">
+        <div className="brand-wrap">
+          <div className="brand-mark">CR</div>
+          <span>Cricket Analytics Project</span>
+        </div>
+        <nav className="tab-nav" aria-label="Project navigation">
+          {tabs.map((tab) => (
+            <button key={tab} type="button" className={activeTab === tab ? 'tab-button active' : 'tab-button'} onClick={() => setActiveTab(tab)}>
+              {tab}
             </button>
           ))}
-        </div>
-      </div>
-
-      {bannerMessage ? (
-        <div className="banner-toast" role="status" aria-live="polite">
-          {bannerMessage}
-        </div>
-      ) : null}
-
-      <div className="page-shell sidebar-layout">
-        <aside className="sidebar">
-          <div className="brand-wrap">
-            <div className="brand-mark">CR</div>
-            <span>Cricket Analytics Project</span>
-          </div>
-
-          <nav className="tab-nav" aria-label="Project navigation">
-            {tabs.map((tab) => (
-              <button
-                key={tab}
-                type="button"
-                className={activeTab === tab ? 'tab-button active' : 'tab-button'}
-                onClick={() => setActiveTab(tab)}
-              >
-                {tab}
-              </button>
-            ))}
-          </nav>
-        </aside>
-
-        <main className="content-wrap">{renderTab()}</main>
-      </div>
-    </>
+        </nav>
+      </aside>
+      <main className="content-wrap">{renderTab()}</main>
+    </div>
   )
 }
 
