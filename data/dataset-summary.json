@@ -1,0 +1,25 @@
+{
+  "raw_rows": 6872,
+  "raw_columns": 38,
+  "clean_rows": 6066,
+  "clean_columns": 40,
+  "rows_removed": 806,
+  "date_range": [
+    "2002-06-27",
+    "2026-10-25"
+  ],
+  "formats": {
+    "T20": 3331,
+    "ODI": 2735
+  },
+  "genders": {
+    "male": 5533,
+    "female": 533
+  },
+  "venues": 375,
+  "teams": 111,
+  "label_balance": {
+    "Chased": 3085,
+    "Defended": 2981
+  }
+}

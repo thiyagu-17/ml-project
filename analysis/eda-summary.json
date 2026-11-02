@@ -1,0 +1,47 @@
+{
+  "raw_rows": 6872,
+  "raw_columns": 38,
+  "raw_missing_cells": 22251,
+  "clean_rows": 6066,
+  "clean_columns": 40,
+  "clean_missing_cells": 0,
+  "rows_removed": 806,
+  "date_range": [
+    "2002-06-27",
+    "2026-10-25"
+  ],
+  "venues": 375,
+  "cities": 271,
+  "teams": 111,
+  "formats": {
+    "T20": 3331,
+    "ODI": 2735
+  },
+  "genders": {
+    "male": 5533,
+    "female": 533
+  },
+  "label_balance": {
+    "Chased": 3085,
+    "Defended": 2981
+  },
+  "toss_winner_win_rate": 0.5026,
+  "toss_chose_to_bat_rate": 0.4853,
+  "median_runs": {
+    "ODI": 250.0,
+    "T20": 151.0
+  },
+  "mean_run_rate": {
+    "ODI": 5.11,
+    "T20": 7.62
+  },
+  "powerplay_correlation": 0.479,
+  "strongest_correlations": {
+    "second_innings_runs": 0.747,
+    "first_innings_overs": 0.733,
+    "powerplay_runs": 0.479,
+    "second_innings_run_rate": 0.357
+  },
+  "has_weather": true,
+  "figure_count": 15
+}

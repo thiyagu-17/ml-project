@@ -1,0 +1,174 @@
+{
+  "task": "Predict whether a first-innings total is Defended or Chased",
+  "n_matches": 6066,
+  "n_features": 14,
+  "feature_names": [
+    "Runs",
+    "Wickets",
+    "Fours",
+    "Sixes",
+    "Extras",
+    "PP runs",
+    "PP wickets",
+    "Run rate",
+    "PP run rate",
+    "Boundary %",
+    "Dot ball %",
+    "Is T20",
+    "Is women's",
+    "Toss winner batted"
+  ],
+  "excluded_for_leakage": [
+    "second innings runs, wickets, overs and run rate"
+  ],
+  "train_rows": 4246,
+  "test_rows": 1820,
+  "test_size": 0.3,
+  "overlapping_rows": 0,
+  "class_balance": {
+    "Defended": 2981,
+    "Chased": 3085
+  },
+  "majority_class_baseline": 0.5088,
+  "naive_bayes": {
+    "Multinomial NB": {
+      "accuracy": 0.7071,
+      "roc_auc": 0.7838,
+      "cv_mean": 0.7171,
+      "cv_std": 0.0108,
+      "confusion_matrix": [
+        [
+          704,
+          222
+        ],
+        [
+          311,
+          583
+        ]
+      ]
+    },
+    "Bernoulli NB": {
+      "accuracy": 0.6918,
+      "roc_auc": 0.7639,
+      "cv_mean": 0.7011,
+      "cv_std": 0.0124,
+      "confusion_matrix": [
+        [
+          648,
+          278
+        ],
+        [
+          283,
+          611
+        ]
+      ]
+    },
+    "Gaussian NB": {
+      "accuracy": 0.7121,
+      "roc_auc": 0.7849,
+      "cv_mean": 0.7193,
+      "cv_std": 0.0141,
+      "confusion_matrix": [
+        [
+          699,
+          227
+        ],
+        [
+          297,
+          597
+        ]
+      ]
+    }
+  },
+  "decision_trees": {
+    "Tree A - Gini, depth 3": {
+      "settings": {
+        "criterion": "gini",
+        "max_depth": 3
+      },
+      "accuracy": 0.7236,
+      "train_accuracy": 0.7383,
+      "roc_auc": 0.7799,
+      "cv_mean": 0.7313,
+      "leaves": 8,
+      "depth": 3,
+      "confusion_matrix": [
+        [
+          711,
+          215
+        ],
+        [
+          288,
+          606
+        ]
+      ]
+    },
+    "Tree B - Entropy, depth 4": {
+      "settings": {
+        "criterion": "entropy",
+        "max_depth": 4
+      },
+      "accuracy": 0.717,
+      "train_accuracy": 0.7438,
+      "roc_auc": 0.791,
+      "cv_mean": 0.7261,
+      "leaves": 15,
+      "depth": 4,
+      "confusion_matrix": [
+        [
+          623,
+          303
+        ],
+        [
+          212,
+          682
+        ]
+      ]
+    },
+    "Tree C - Gini, depth 6, leaves of 40+": {
+      "settings": {
+        "criterion": "gini",
+        "max_depth": 6,
+        "min_samples_leaf": 40
+      },
+      "accuracy": 0.7209,
+      "train_accuracy": 0.7534,
+      "roc_auc": 0.7872,
+      "cv_mean": 0.7162,
+      "leaves": 45,
+      "depth": 6,
+      "confusion_matrix": [
+        [
+          647,
+          279
+        ],
+        [
+          229,
+          665
+        ]
+      ]
+    }
+  },
+  "decision_tree_depth_study": {
+    "best_depth": 2,
+    "deep_train_accuracy": 0.9965,
+    "deep_test_accuracy": 0.656
+  },
+  "impurity_example": {
+    "feature": "Run rate",
+    "threshold": 6.15,
+    "parent_gini": 0.4999,
+    "parent_entropy": 0.9998,
+    "left_count": 2134,
+    "right_count": 2112,
+    "left_entropy": 0.9191,
+    "right_entropy": 0.9336,
+    "weighted_child_entropy": 0.9263,
+    "information_gain": 0.0735,
+    "weighted_child_gini": 0.4498
+  },
+  "best_overall": [
+    "Tree A - Gini, depth 3",
+    0.7236
+  ]
+}
