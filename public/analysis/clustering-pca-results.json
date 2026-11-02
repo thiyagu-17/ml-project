@@ -1,0 +1,199 @@
+{
+  "n_matches": 6066,
+  "n_features": 11,
+  "feature_names": [
+    "first_innings_runs",
+    "first_innings_wickets",
+    "first_innings_overs",
+    "first_innings_run_rate",
+    "powerplay_runs",
+    "powerplay_run_rate",
+    "boundary_share",
+    "dot_ball_share",
+    "extras_share",
+    "second_innings_runs",
+    "second_innings_run_rate"
+  ],
+  "scaled": true,
+  "kmeans": [
+    {
+      "k": 2,
+      "silhouette": 0.3031,
+      "inertia": 46750.1
+    },
+    {
+      "k": 3,
+      "silhouette": 0.2999,
+      "inertia": 35969.5
+    },
+    {
+      "k": 4,
+      "silhouette": 0.2495,
+      "inertia": 31282.0
+    },
+    {
+      "k": 5,
+      "silhouette": 0.2206,
+      "inertia": 28183.7
+    },
+    {
+      "k": 6,
+      "silhouette": 0.1987,
+      "inertia": 26679.0
+    },
+    {
+      "k": 7,
+      "silhouette": 0.1688,
+      "inertia": 25295.3
+    },
+    {
+      "k": 8,
+      "silhouette": 0.1639,
+      "inertia": 24203.7
+    }
+  ],
+  "kmeans_best_k": 2,
+  "kmeans_best_silhouette": 0.3031,
+  "headline_k": {
+    "2": 0.3031,
+    "3": 0.2999,
+    "4": 0.2495
+  },
+  "hierarchical": [
+    {
+      "k": 2,
+      "silhouette": 0.5162
+    },
+    {
+      "k": 3,
+      "silhouette": 0.4562
+    },
+    {
+      "k": 4,
+      "silhouette": 0.3964
+    },
+    {
+      "k": 5,
+      "silhouette": 0.3636
+    },
+    {
+      "k": 6,
+      "silhouette": 0.2829
+    },
+    {
+      "k": 7,
+      "silhouette": 0.2767
+    },
+    {
+      "k": 8,
+      "silhouette": 0.2818
+    }
+  ],
+  "hierarchical_best_k": 2,
+  "hierarchical_best_silhouette": 0.5162,
+  "hierarchical_sample_size": 1000,
+  "adjusted_rand_index": 0.9761,
+  "cluster_sizes": {
+    "0": 2737,
+    "1": 3329
+  },
+  "cluster_format_mix": {
+    "0": {
+      "ODI": 0.997,
+      "T20": 0.003
+    },
+    "1": {
+      "T20": 0.998,
+      "ODI": 0.002
+    }
+  },
+  "cluster_mean_runs": {
+    "0": 247.7,
+    "1": 150.6
+  },
+  "cluster_defended_rate": {
+    "0": 0.486,
+    "1": 0.496
+  },
+  "explained_variance_ratio": [
+    0.40206,
+    0.26506,
+    0.0863,
+    0.08023,
+    0.07261,
+    0.04769,
+    0.02697,
+    0.01278,
+    0.00304,
+    0.00209,
+    0.00118
+  ],
+  "cumulative_variance_ratio": [
+    0.40206,
+    0.66712,
+    0.75341,
+    0.83364,
+    0.90625,
+    0.95394,
+    0.98091,
+    0.99369,
+    0.99673,
+    0.99882,
+    1.0
+  ],
+  "eigenvalues": [
+    4.4234,
+    2.9161,
+    0.9494,
+    0.8827,
+    0.7988,
+    0.5247,
+    0.2967,
+    0.1406,
+    0.0334,
+    0.023,
+    0.0129
+  ],
+  "singular_values": [
+    163.792,
+    132.99,
+    75.882,
+    73.166,
+    69.606,
+    56.41,
+    42.422,
+    29.203,
+    14.234,
+    11.82,
+    8.861
+  ],
+  "components_for_90_percent": 5,
+  "pc1_pc2_variance": 0.6671,
+  "pc1_loadings": {
+    "1st runs": 0.046,
+    "1st wickets": -0.294,
+    "1st overs": -0.264,
+    "1st run rate": 0.455,
+    "PP runs": 0.3,
+    "PP run rate": 0.425,
+    "Boundary %": 0.347,
+    "Dot ball %": -0.419,
+    "Extras %": -0.152,
+    "2nd runs": -0.041,
+    "2nd run rate": 0.208
+  },
+  "pc2_loadings": {
+    "1st runs": 0.557,
+    "1st wickets": -0.111,
+    "1st overs": 0.475,
+    "1st run rate": -0.002,
+    "PP runs": 0.277,
+    "PP run rate": -0.042,
+    "Boundary %": 0.071,
+    "Dot ball %": -0.029,
+    "Extras %": -0.262,
+    "2nd runs": 0.481,
+    "2nd run rate": -0.259
+  },
+  "eigenvalues_above_one": 2
+}
