@@ -150,9 +150,10 @@
     }
   },
   "decision_tree_depth_study": {
-    "best_depth": 2,
+    "best_depth": 3,
+    "best_cv_accuracy": 0.7313,
     "deep_train_accuracy": 0.9965,
-    "deep_test_accuracy": 0.656
+    "deep_cv_accuracy": 0.6646
   },
   "impurity_example": {
     "feature": "Run rate",

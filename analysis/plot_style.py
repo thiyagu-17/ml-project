@@ -82,7 +82,7 @@ def _draw_table(axis, display, fontsize: float) -> None:
     axis.axis("off")
     table = axis.table(
         cellText=display.values,
-        colLabels=[shorten(c, 18) for c in display.columns],
+        colLabels=[shorten(c, 22) for c in display.columns],
         loc="center",
         cellLoc="center",
     )
