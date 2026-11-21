@@ -21,5 +21,7 @@
   "label_balance": {
     "Chased": 3085,
     "Defended": 2981
-  }
+  },
+  "short_innings_removed": 139,
+  "bowled_out_short_innings_removed": 75
 }

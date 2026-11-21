@@ -1,14 +1,22 @@
 import { useEffect, useState } from 'react'
 import './App.css'
-import cricketPlayer from './assets/334647.jpg'
-import cricketCelebration from './assets/Screenshot 2026-09-20 214218.png'
-import { aboutMe, conclusionParagraphs, introParagraphs, questions } from './content'
+import cricketPlayer from './assets/batter-at-crease.jpg'
+import cricketCelebration from './assets/wicket-celebration.png'
+import { aboutMe, conclusionParagraphs, introParagraphs, introSources, questions } from './content'
 
 const tabs = [
   'Introduction', 'DataPrep_EDA', 'Clustering', 'PCA', 'NaiveBayes', 'DecTrees',
   'Regression', 'AdaBoost', 'GradientBoosting', 'XGBoost', 'SVM', 'NN',
   'Conclusions', 'About Me',
 ]
+
+// Each tab has its own address (for example #Clustering), so a tab can be
+// linked to directly, bookmarked, and survives a page refresh.
+const tabHref = (tab) => `#${encodeURIComponent(tab)}`
+const tabFromHash = () => {
+  const name = decodeURIComponent(window.location.hash.slice(1))
+  return tabs.includes(name) ? name : 'Introduction'
+}
 
 const assetUrl = (path) => `${import.meta.env.BASE_URL}${path}`
 const figureUrl = (name) => assetUrl(`analysis/${name}`)
@@ -56,7 +64,9 @@ function DataLinks({ items }) {
 
 // --------------------------------------------------------------------------
 
-const edaFigures = [
+// Captions that quote a number take it from eda-summary.json, so they stay
+// correct whenever the pipeline is re-run.
+const edaFigures = (eda) => [
   {
     name: 'missing-values.png',
     alt: 'Bar chart comparing empty cells per column in the raw and cleaned files',
@@ -65,12 +75,12 @@ const edaFigures = [
   {
     name: 'runs-distribution.png',
     alt: 'Overlaid histograms of first-innings totals for the fifty-over and twenty-over game',
-    caption: 'Figure 2: First-innings totals form two clearly separated peaks, one for each format. The fifty-over median sits at 250 runs against 151 for the twenty-over game, which is close to the ratio of overs available.',
+    caption: `Figure 2: First-innings totals form two clearly separated peaks, one for each format. The fifty-over median sits at ${eda.median_runs.ODI} runs against ${eda.median_runs.T20} for the twenty-over game, which is close to the ratio of overs available.`,
   },
   {
     name: 'run-rate-by-format.png',
     alt: 'Box plots of first-innings run rate split by format and by gender',
-    caption: 'Figure 3: Scoring rate rises sharply as the format shortens, from about 5.1 runs per over to about 7.6. The spread within each group is wide, which shows that format sets the general level but conditions and opposition still move individual matches a long way.',
+    caption: `Figure 3: Scoring rate rises sharply as the format shortens, from about ${eda.mean_run_rate.ODI.toFixed(1)} runs per over to about ${eda.mean_run_rate.T20.toFixed(1)}. The spread within each group is wide, which shows that format sets the general level but conditions and opposition still move individual matches a long way.`,
   },
   {
     name: 'runs-vs-overs.png',
@@ -85,12 +95,12 @@ const edaFigures = [
   {
     name: 'correlation-heatmap.png',
     alt: 'Correlation matrix of the eleven numeric match features',
-    caption: 'Figure 6: Run rate moves strongly with boundary share and strongly against dot-ball share, which is expected because those three describe the same scoring behaviour from different angles. The near absence of correlation between powerplay runs and run rate is more surprising and is examined in Figure 10.',
+    caption: `Figure 6: Run rate moves strongly with boundary share and strongly against dot-ball share, which is expected because those three describe the same scoring behaviour from different angles. Powerplay runs are only moderately related to the final total, at about ${eda.powerplay_correlation.toFixed(2)}, which is examined in Figure 10.`,
   },
   {
     name: 'matches-per-year.png',
     alt: 'Stacked bar chart of matches per year by format',
-    caption: 'Figure 7: The volume of recorded international cricket grows steadily, and the twenty-over game overtakes the fifty-over game after about 2015. The final year is partial because the archive was downloaded mid-season.',
+    caption: `Figure 7: The volume of recorded international cricket grows steadily, and from ${eda.t20_majority_since} onward the twenty-over game outnumbers the fifty-over game every year. The final year is partial because the archive was downloaded mid-season.`,
   },
   {
     name: 'scoring-trend.png',
@@ -105,12 +115,12 @@ const edaFigures = [
   {
     name: 'powerplay-vs-total.png',
     alt: 'Scatter plot of powerplay runs against the final first-innings total with fitted lines',
-    caption: 'Figure 10: A strong powerplay is only loosely connected to the eventual total, with a correlation of about 0.48 across all matches. The wide vertical scatter at every powerplay score shows that many fast starts were not converted and many slow starts recovered.',
+    caption: `Figure 10: A strong powerplay is only loosely connected to the eventual total, with a correlation of about ${eda.powerplay_correlation.toFixed(2)} across all matches. The wide vertical scatter at every powerplay score shows that many fast starts were not converted and many slow starts recovered.`,
   },
   {
     name: 'toss-and-result.png',
     alt: 'Two bar charts showing toss outcomes and the balance of defended and chased totals',
-    caption: 'Figure 11: Captains who won the toss went on to win the match almost exactly half the time, whichever decision they made. The right-hand panel shows that totals are defended and chased at close to even rates in both formats.',
+    caption: `Figure 11: Captains who won the toss went on to win ${percent(eda.toss_decision_win_rate.bat)} of matches when they chose to bat and ${percent(eda.toss_decision_win_rate.field)} when they chose to field, both close to half. The right-hand panel shows that totals are defended and chased at close to even rates in both formats.`,
   },
   {
     name: 'top-venues.png',
@@ -120,7 +130,7 @@ const edaFigures = [
   {
     name: 'top-teams.png',
     alt: 'Horizontal bar chart of the fifteen teams appearing most often',
-    caption: 'Figure 13: The established full-member nations dominate the fixture list by a wide margin. The long tail of associate nations beyond these fifteen is the main reason the dataset contains 111 distinct teams.',
+    caption: `Figure 13: The established full-member nations dominate the fixture list by a wide margin. The long tail of associate nations beyond these fifteen is the main reason the dataset contains ${eda.teams} distinct teams.`,
   },
   {
     name: 'weather-vs-scoring.png',
@@ -130,14 +140,24 @@ const edaFigures = [
   {
     name: 'clean-sample-table.png',
     alt: 'Table image showing seven rows of the cleaned match dataset',
-    caption: 'Figure 15: Seven rows of the finished analysis table, showing the derived scoring measures and the result label beside the original match details. Every column in this file is populated for all 6,066 rows.',
+    caption: `Figure 15: Seven rows of the finished analysis table, showing the derived scoring measures and the result label beside the original match details. Every column in this file is populated for all ${eda.clean_rows.toLocaleString()} rows.`,
   },
 ]
 
 // --------------------------------------------------------------------------
 
 function App() {
-  const [activeTab, setActiveTab] = useState('Introduction')
+  const [activeTab, setActiveTab] = useState(tabFromHash)
+
+  useEffect(() => {
+    const onHashChange = () => setActiveTab(tabFromHash())
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [])
+
+  // Start every tab at the top rather than at the previous tab's scroll depth.
+  useEffect(() => { window.scrollTo(0, 0) }, [activeTab])
+
   const [eda, setEda] = useState(null)
   const [unsupervised, setUnsupervised] = useState(null)
   const [supervised, setSupervised] = useState(null)
@@ -206,6 +226,18 @@ function App() {
         {introParagraphs.slice(2).map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
       </div>
 
+      <div className="model-section-block sources-block">
+        <h4>Sources</h4>
+        <ol>
+          {introSources.map((source) => (
+            <li key={source.url}>
+              {source.text}{' '}
+              <a href={source.url} target="_blank" rel="noreferrer">{source.label}</a>
+            </li>
+          ))}
+        </ol>
+      </div>
+
       <div className="questions-box">
         <h3>Ten questions this project sets out to answer</h3>
         <ol>{questions.map((question) => <li key={question}>{question}</li>)}</ol>
@@ -268,6 +300,13 @@ function App() {
               venue details. Access requires a free key, which is read from an environment
               variable and never stored in the repository.
             </p>
+            <p>
+              The raw response is saved one row per innings. Cleaning keeps only one-day and
+              twenty-over innings (taking the format from the match name when the API leaves it
+              blank), converts overs from cricket notation into balls (18.4 overs is 18 overs and
+              4 balls, so 112 balls), repairs batting-team names that the API returns in lower
+              case or as both teams joined together, and computes a true run rate for each innings.
+            </p>
             <div className="api-box">
               <h3>Endpoint and example request</h3>
               <p><code>GET https://api.cricapi.com/v1/currentMatches?apikey=&lt;KEY&gt;&amp;offset=0</code></p>
@@ -278,7 +317,8 @@ function App() {
               </p>
             </div>
             <DataLinks items={[
-              { href: dataUrl('cricapi-current-snapshot.csv'), label: 'Snapshot returned by this endpoint', download: true },
+              { href: dataUrl('cricapi-current-snapshot.csv'), label: 'Raw snapshot returned by this endpoint', download: true },
+              { href: dataUrl('cricapi-current-clean.csv'), label: 'Cleaned snapshot', download: true },
             ]} />
           </div>
 
@@ -286,9 +326,10 @@ function App() {
             <span className="source-type">REST API</span>
             <h3>Open-Meteo archive and geocoding</h3>
             <p>
-              Supplies the maximum temperature, minimum temperature and rainfall recorded at each
-              host city on each match date. No key is required, so this part of the pipeline can
-              be reproduced by anyone.
+              Supplies the maximum temperature, minimum temperature and rainfall recorded on each
+              match date at the busiest host cities, meaning every city with at least 38 matches
+              in the cleaned data. No key is required, so this part of the pipeline can be
+              reproduced by anyone.
             </p>
             <div className="api-box">
               <h3>Endpoints and example requests</h3>
@@ -321,12 +362,14 @@ function App() {
           <Figure
             name="raw-sample-table.png"
             alt="Table image of seven raw rows with missing values marked"
-            caption="Figure A: Seven rows of the flattened raw file, with empty cells marked. The gaps in winner, city and second-innings columns are what the cleaning rules below had to resolve."
+            caption="Figure A: Seven rows of the flattened raw file, with empty cells marked. The gaps in the city, winning-margin and method columns are typical of what the cleaning rules below had to resolve."
+            wide
           />
           <Figure
             name="clean-sample-table.png"
             alt="Table image of seven cleaned rows with no missing values"
             caption="Figure B: The same table after cleaning, with derived scoring measures and the result label added. No cell in this file is empty."
+            wide
           />
         </div>
 
@@ -334,12 +377,27 @@ function App() {
           <h4>Cleaning rules applied, in order</h4>
           <ol>
             <li>Text columns trimmed; known team-name aliases such as <em>USA</em> and <em>UAE</em> resolved to one spelling each.</li>
-            <li>Venue names collapsed where one spelling is a prefix of another, which merged 133 duplicate venues and reduced the venue count from 508 to {eda ? eda.venues : '375'}.</li>
+            <li>
+              Venue names collapsed where one spelling is a prefix of another
+              {eda
+                ? `, which merged ${eda.venue_spellings_merged} spelling variants and reduced the distinct venue names from ${eda.raw_venues} to ${eda.venues_after_merge}; after the row removals below, ${eda.venues} venues remain.`
+                : '.'}
+            </li>
             <li>Dates parsed to a single format; any row with an unrecoverable date removed.</li>
             <li>All score columns coerced to numbers, with non-numeric entries treated as missing rather than silently set to zero.</li>
             <li>Abandoned matches, ties and matches decided by a revised rain target removed, because a first-innings total cannot be compared against a target that was later changed.</li>
             <li>Structurally impossible rows removed: negative runs, more than ten wickets, or a missing batting side.</li>
-            <li>Innings cut to under 60 percent of their scheduled overs removed as rain-affected fragments rather than contests.</li>
+            <li>
+              First innings that lasted less than 60 percent of their scheduled overs removed, so
+              that every total is compared with full-length innings. Most of these were
+              interrupted fragments, but
+              {eda?.bowled_out_short_innings_removed
+                ? ` ${eda.bowled_out_short_innings_removed} `
+                : ' some '}
+              were innings that ended early because the side was bowled out. Those are genuine
+              results, almost all chased down easily, so the cleaned data slightly
+              under-represents one-sided matches.
+            </li>
             <li>Duplicate fixtures removed, both by match identifier and by the combination of date, teams and first-innings score.</li>
             <li>Remaining optional text fields filled from a defensible source: city taken from the venue string, absent awards recorded as <em>Not awarded</em>.</li>
             <li>Derived measures added: run rate, powerplay run rate, boundary share, dot-ball share, extras share, and the result label.</li>
@@ -359,7 +417,8 @@ function App() {
         <DataLinks items={[
           { href: dataUrl('cricsheet-matches-raw.csv'), label: 'Raw flattened matches (CSV)', download: true },
           { href: dataUrl('cricsheet-matches-clean.csv'), label: 'Cleaned matches (CSV)', download: true },
-          { href: dataUrl('cricapi-current-snapshot.csv'), label: 'CricAPI snapshot (CSV)', download: true },
+          { href: dataUrl('cricapi-current-snapshot.csv'), label: 'CricAPI raw snapshot (CSV)', download: true },
+          { href: dataUrl('cricapi-current-clean.csv'), label: 'CricAPI cleaned snapshot (CSV)', download: true },
           { href: dataUrl('venue-weather.csv'), label: 'Venue weather (CSV)', download: true },
           { href: dataUrl('dataset-summary.json'), label: 'Dataset summary (JSON)', download: true },
         ]} />
@@ -388,7 +447,9 @@ function App() {
           directly. Each thumbnail opens at full size.
         </p>
         <div className="analysis-figure-grid">
-          {edaFigures.map((figure) => <Figure key={figure.name} {...figure} />)}
+          {eda
+            ? edaFigures(eda).map((figure) => <Figure key={figure.name} {...figure} />)
+            : pending('the exploratory figures')}
         </div>
       </section>
 
@@ -398,8 +459,11 @@ function App() {
           Three results are visible before any model is fitted. The toss appears to be worth
           almost nothing: the captain who won it went on to win the match
           {eda ? ` ${percent(eda.toss_winner_win_rate)} ` : ' '}
-          of the time, and the two possible decisions performed within two points of each other.
-          Format is the dominant structure in the data, separating totals, scoring rates,
+          of the time
+          {eda
+            ? `, winning ${percent(eda.toss_decision_win_rate.bat)} after choosing to bat and ${percent(eda.toss_decision_win_rate.field)} after choosing to field.`
+            : '.'}
+          {' '}Format is the dominant structure in the data, separating totals, scoring rates,
           boundary shares and dot-ball shares into two distinct populations. The powerplay is
           weaker evidence than commentary implies, correlating with the final total at only
           {eda ? ` ${eda.powerplay_correlation}` : ''}. These observations set up the grouping
@@ -430,7 +494,7 @@ function App() {
             method are used here. <strong>Partitional</strong> clustering, of which k-means is the
             standard example, requires the number of groups to be fixed in advance; it places k
             centres, assigns every match to its nearest centre, moves each centre to the mean of
-            what it captured, and repeats until nothing moves. <strong>Hierarchical</strong>
+            what it captured, and repeats until nothing moves. <strong>Hierarchical</strong>{' '}
             clustering instead builds a whole tree: it begins with every match in a group of its
             own, repeatedly merges the two closest groups, and continues until one group remains.
             The number of clusters is then chosen afterwards by cutting the tree at a height.
@@ -451,14 +515,16 @@ function App() {
           </p>
           <div className="analysis-figure-grid">
             <Figure
-              name="cluster-map.png"
-              alt="Scatter plot of matches on two principal components coloured by k-means cluster"
-              caption="Figure 1: Every match placed on the first two principal components and coloured by its k-means group, with crosses marking the cluster centres. The two groups occupy clearly separate regions with only a narrow band of overlap."
+              name="concept-kmeans-steps.png"
+              alt="Three panels showing k-means choosing centres, assigning points and moving centres"
+              caption="Figure 1: Partitional clustering with k-means on a small made-up example. Starting centres are placed, every point joins its nearest centre, and each centre moves to the mean of its points until nothing changes."
+              wide
             />
             <Figure
-              name="dendrogram.png"
-              alt="Average-linkage dendrogram built on cosine distance"
-              caption="Figure 2: The hierarchical merge tree, read from the individual matches at the bottom upward to a single group at the top. The dashed line marks the height at which the tree was cut to produce two clusters."
+              name="concept-hierarchical-distance.png"
+              alt="A small dendrogram beside a diagram comparing Euclidean and cosine distance"
+              caption="Figure 2: Left, hierarchical clustering merges the closest groups step by step and is cut afterwards to give the clusters. Right, Euclidean distance measures the straight line between two points while cosine distance measures only the angle between them."
+              wide
             />
           </div>
         </section>
@@ -481,14 +547,23 @@ function App() {
             deviation in every direction rather than one run in one column and one percentage point
             in another.
           </p>
-          <Figure
-            name="clustering-input-sample.png"
-            alt="Table image of six rows of the unlabelled numeric clustering input"
-            caption="Figure 3: Six rows of the clustering input. There is no label column and no text column anywhere in this table, which is the requirement for an unsupervised method."
-            wide
-          />
+          <div className="raw-clean-grid">
+            <Figure
+              name="clustering-input-sample.png"
+              alt="Table image of six rows of the unlabelled numeric clustering input"
+              caption="Figure 3: Six rows of the clustering input as recorded. There is no label column and no text column anywhere in this table, which is the requirement for an unsupervised method."
+              wide
+            />
+            <Figure
+              name="clustering-input-standardised.png"
+              alt="Table image of the same six rows after standardising each column"
+              caption="Figure 4: The same six rows after standardising, which is the matrix both clustering methods actually receive. A value of 1 means one standard deviation above that column's average."
+              wide
+            />
+          </div>
           <DataLinks items={[
-            { href: dataUrl('clustering-input-sample.csv'), label: 'Clustering input (CSV)', download: true },
+            { href: dataUrl('clustering-input-sample.csv'), label: 'Clustering input, before scaling (CSV)', download: true },
+            { href: dataUrl('clustering-input-standardised.csv'), label: 'Clustering input, standardised (CSV)', download: true },
             { href: dataUrl('cricsheet-matches-clean.csv'), label: 'Cleaned source data (CSV)', download: true },
             { href: dataUrl('cricsheet-matches-raw.csv'), label: 'Raw source data (CSV)', download: true },
             { href: 'https://cricsheet.org/downloads/', label: 'Original raw archives' },
@@ -504,6 +579,7 @@ function App() {
           </p>
           <CodeLinks items={[
             { file: 'clustering_pca.py', label: 'clustering_pca.py — clustering, PCA and SVD' },
+            { file: 'concept_figures.py', label: 'concept_figures.py — overview diagrams' },
             { file: 'build_dataset.py', label: 'build_dataset.py — upstream data pipeline' },
           ]} />
         </section>
@@ -524,6 +600,14 @@ function App() {
                 from -1 to 1, so higher is better. It falls away steadily as k grows, which says
                 that splitting the data more finely produces groups that are no longer
                 well separated.
+                {results.kmeans_tied_with_hierarchical_k ? (
+                  <>
+                    {' '}At the top, however, k-means cannot choose on its own: its best score,{' '}
+                    {results.kmeans_best_silhouette.toFixed(3)} at k = {results.kmeans_best_k}, is
+                    within {results.silhouette_tie_tolerance} of its score at k ={' '}
+                    {results.chosen_k}, a gap too small to treat as a real preference.
+                  </>
+                ) : null}
               </p>
               <div className="metric-strip">
                 <div><span>Best k (k-means)</span><strong>{results.kmeans_best_k}</strong></div>
@@ -532,13 +616,19 @@ function App() {
               </div>
               <p>
                 The hierarchical model, using cosine distance on a format-balanced sample of{' '}
-                {results.hierarchical_sample_size.toLocaleString()} matches, independently reached
-                the same answer: its silhouette also peaks at k = {results.hierarchical_best_k},
-                at {results.hierarchical_best_silhouette.toFixed(3)}. The dendrogram shows the
-                same conclusion visually, splitting into two long branches that join only at the
-                very top of the tree. Agreement between the two solutions was measured with the
-                adjusted Rand index, which scores 1 for identical groupings and 0 for the
-                agreement expected by chance; the two methods scored{' '}
+                {results.hierarchical_sample_size.toLocaleString()} matches,
+                {results.methods_agree_on_k
+                  ? ' independently reached the same answer: its silhouette also peaks at k = '
+                  : ' gives a clearer answer: its silhouette peaks at k = '}
+                {results.hierarchical_best_k}, at{' '}
+                {results.hierarchical_best_silhouette.toFixed(3)}.
+                {results.kmeans_tied_with_hierarchical_k
+                  ? ` Because the k-means scores were effectively tied, k = ${results.chosen_k} was used as the number of clusters that both methods support, and every cluster figure below uses it.`
+                  : ''}
+                {' '}The dendrogram shows the same conclusion visually, splitting into two long
+                branches that join only at the very top of the tree. Agreement between the two
+                solutions was measured with the adjusted Rand index, which scores 1 for identical
+                groupings and 0 for the agreement expected by chance; the two methods scored{' '}
                 <strong>{results.adjusted_rand_index.toFixed(3)}</strong>. Two methods using
                 different distance measures and different algorithms almost never agree that
                 closely unless the structure they are describing is genuinely present.
@@ -547,23 +637,35 @@ function App() {
                 <Figure
                   name="silhouette-comparison.png"
                   alt="Line chart of silhouette score against number of clusters for both methods"
-                  caption="Figure 4: Silhouette scores for both methods across k = 2 to 8, with the chosen k marked. Both curves fall monotonically after k = 2, so no larger number of clusters is supported."
+                  caption={`Figure 5: Silhouette scores for both methods across k = 2 to 8, with the chosen k marked. ${results.methods_agree_on_k
+                    ? `Both methods score highest at k = ${results.chosen_k}, the average-linkage curve by a wide margin, and neither supports a larger number of clusters.`
+                    : `The k-means curve is almost level between its best k and k = ${results.chosen_k}, while the average-linkage curve is highest at k = ${results.chosen_k} by a wide margin.`}`}
                 />
                 <Figure
                   name="silhouette-profile.png"
                   alt="Silhouette width of individual matches grouped by cluster"
-                  caption="Figure 5: The silhouette width of individual matches, sorted within each cluster. Almost all values are positive, meaning very few matches sit closer to the other group than to their own."
+                  caption="Figure 6: The silhouette width of individual matches at the chosen k, sorted within each cluster. Almost all values are positive, meaning very few matches sit closer to the other group than to their own."
+                />
+                <Figure
+                  name="cluster-map.png"
+                  alt="Scatter plot of matches on two principal components coloured by k-means cluster"
+                  caption="Figure 7: Every match placed on the first two principal components and coloured by its k-means group, with crosses marking the cluster centres. The two groups occupy clearly separate regions with only a narrow band of overlap."
+                />
+                <Figure
+                  name="dendrogram.png"
+                  alt="Average-linkage dendrogram built on cosine distance"
+                  caption="Figure 8: The hierarchical merge tree, read from the individual matches at the bottom upward to a single group at the top. The dashed line marks the height at which the tree was cut to produce two clusters."
                 />
                 <Figure
                   name="cluster-profiles.png"
                   alt="Heatmap of mean standardised feature values within each cluster"
-                  caption="Figure 6: What actually separates the two clusters, measured in standard deviations from the overall mean. Cluster 0 is long, slow and dot-heavy; cluster 1 is short, fast and boundary-heavy."
+                  caption="Figure 9: What actually separates the two clusters, measured in standard deviations from the overall mean. Cluster 0 is long, slow and dot-heavy; cluster 1 is short, fast and boundary-heavy."
                   wide
                 />
                 <Figure
                   name="cluster-composition.png"
                   alt="Stacked bars showing the format mix and result mix inside each cluster"
-                  caption="Figure 7: The format and result composition of each cluster, neither of which was available when fitting. The format split is almost perfect, while the result split sits near even in both clusters."
+                  caption="Figure 10: The format and result composition of each cluster, neither of which was available when fitting. The format split is almost perfect, while the result split sits near even in both clusters."
                   wide
                 />
               </div>
@@ -634,7 +736,7 @@ function App() {
             columns.
           </p>
           <p>
-            Underneath this sits an <strong>eigenvalue</strong> and <strong>eigenvector</strong>
+            Underneath this sits an <strong>eigenvalue</strong> and <strong>eigenvector</strong>{' '}
             problem. The relationships among the standardised columns are summarised in a
             correlation matrix. An eigenvector of that matrix is a direction that the matrix
             stretches without rotating, and its eigenvalue is the factor by which it stretches.
@@ -659,14 +761,15 @@ function App() {
           </p>
           <div className="analysis-figure-grid">
             <Figure
-              name="pca-scree.png"
-              alt="Scree plot of variance explained per component with a cumulative line"
-              caption="Figure 1: The share of variance captured by each component, with the running total on the right axis. The first two components carry two thirds of the variation and five are needed to pass ninety percent."
+              name="concept-pca-eigenvectors.png"
+              alt="A two-dimensional point cloud with its two eigenvectors, and the same points projected onto the first"
+              caption="Figure 1: Left, the eigenvectors of a small made-up dataset point along its directions of greatest spread, and each eigenvalue gives the variance along its arrow. Right, keeping only the first component replaces two columns with one while keeping most of the variation."
+              wide
             />
             <Figure
-              name="pca-biplot.png"
-              alt="PCA biplot showing matches as points and original features as arrows"
-              caption="Figure 2: Matches drawn on the first two components, with arrows showing the direction each original measurement points. Arrows close together describe measurements that tend to rise and fall together."
+              name="concept-dimensionality.png"
+              alt="Line chart showing the gap between nearest and farthest distances shrinking as dimensions increase"
+              caption="Figure 2: For random points, the farthest neighbour is many times farther away than the nearest in two dimensions but only slightly farther in a thousand. This is why distance-based methods weaken as columns are added, and one reason to reduce dimensions first."
             />
           </div>
         </section>
@@ -682,14 +785,23 @@ function App() {
             therefore used here, which is equivalent to analysing the correlation matrix rather
             than the covariance matrix.
           </p>
-          <Figure
-            name="clustering-input-sample.png"
-            alt="Table image of six rows of the numeric PCA input"
-            caption="Figure 3: The same unlabelled numeric matrix used for clustering, which is the required input form for PCA. Standardising before decomposition is what stops the run-total columns from absorbing the first component."
-            wide
-          />
+          <div className="raw-clean-grid">
+            <Figure
+              name="clustering-input-sample.png"
+              alt="Table image of six rows of the numeric PCA input"
+              caption="Figure 3: The same unlabelled numeric matrix used for clustering, which is the required input form for PCA. Every column is a number and no row is missing a value."
+              wide
+            />
+            <Figure
+              name="clustering-input-standardised.png"
+              alt="Table image of the same six rows after standardising"
+              caption="Figure 4: The same rows after standardising, which is what PCA actually decomposes. Standardising before decomposition is what stops the run-total columns from absorbing the first component."
+              wide
+            />
+          </div>
           <DataLinks items={[
-            { href: dataUrl('clustering-input-sample.csv'), label: 'PCA input (CSV)', download: true },
+            { href: dataUrl('clustering-input-sample.csv'), label: 'PCA input, before scaling (CSV)', download: true },
+            { href: dataUrl('clustering-input-standardised.csv'), label: 'PCA input, standardised (CSV)', download: true },
             { href: dataUrl('cricsheet-matches-clean.csv'), label: 'Cleaned source data (CSV)', download: true },
             { href: dataUrl('cricsheet-matches-raw.csv'), label: 'Raw source data (CSV)', download: true },
             { href: 'https://cricsheet.org/downloads/', label: 'Original raw archives' },
@@ -705,6 +817,7 @@ function App() {
           </p>
           <CodeLinks items={[
             { file: 'clustering_pca.py', label: 'clustering_pca.py — clustering, PCA and SVD' },
+            { file: 'concept_figures.py', label: 'concept_figures.py — overview diagrams' },
           ]} />
         </section>
 
@@ -730,6 +843,18 @@ function App() {
                 itself the sign of a well-scaled problem; a first component near 99 percent would
                 indicate one unstandardised column swamping the rest.
               </p>
+              <div className="analysis-figure-grid">
+                <Figure
+                  name="pca-scree.png"
+                  alt="Scree plot of variance explained per component with a cumulative line"
+                  caption="Figure 5: The share of variance captured by each component, with the running total on the right axis. The first two components carry two thirds of the variation and five are needed to pass ninety percent."
+                />
+                <Figure
+                  name="pca-biplot.png"
+                  alt="PCA biplot showing matches as points and original features as arrows"
+                  caption="Figure 6: Matches drawn on the first two components, with arrows showing the direction each original measurement points. Arrows close together describe measurements that tend to rise and fall together."
+                />
+              </div>
               <p>
                 Reading the biplot is a matter of reading the arrows. Each arrow points in the
                 direction in which that original measurement increases, its length shows how
@@ -755,13 +880,13 @@ function App() {
                 <Figure
                   name="pca-loadings.png"
                   alt="Heatmap of feature loadings on the first four principal components"
-                  caption="Figure 4: How strongly each original measurement contributes to the first four components. The alternating signs on PC1 confirm it contrasts fast, boundary-driven innings against slow, dot-heavy ones."
+                  caption="Figure 7: How strongly each original measurement contributes to the first four components. The alternating signs on PC1 confirm it contrasts fast, boundary-driven innings against slow, dot-heavy ones."
                   wide
                 />
                 <Figure
                   name="svd-spectrum.png"
                   alt="Singular values of the centred matrix beside the eigenvalues of the correlation matrix"
-                  caption="Figure 5: The singular values from the decomposition beside the eigenvalues they produce. Each eigenvalue is the square of its singular value divided by one less than the number of matches, which is the algebraic link between SVD and PCA."
+                  caption="Figure 8: The singular values from the decomposition beside the eigenvalues they produce. Each eigenvalue is the square of its singular value divided by one less than the number of matches, which is the algebraic link between SVD and PCA."
                   wide
                 />
               </div>
@@ -885,9 +1010,12 @@ function App() {
             available at the innings break: seven counts, four rates, and three context
             indicators for format, gender and whether the toss winner chose to bat.
             scikit-learn&apos;s Multinomial Naive Bayes also requires numeric, non-negative input,
-            so the rate columns were rescaled onto the range 0 to 1 using limits learned from the
-            training data only. The Bernoulli model required a different preparation again: each
-            column was split at its training-set median into above-typical and at-or-below-typical.
+            and its columns arrive on very different scales, so all fourteen columns were rescaled
+            onto the range 0 to 1 using limits learned from the training data only (Figure 7). The
+            Bernoulli model required a different preparation again (Figure 8): each measured
+            column was split at its training-set median into above-typical and
+            at-or-below-typical, while the three yes/no context columns were already 0 or 1 and
+            were used as they are.
           </p>
           <p>
             The data was then split into a <strong>training set</strong> used to build the model
@@ -898,7 +1026,8 @@ function App() {
             training data can look excellent and still fail completely on a new match. Stratifying
             keeps the same proportion of each outcome in both halves, so the test set is a fair
             sample rather than an accidentally lopsided one. The split was verified to share zero
-            rows.
+            rows, and each file carries the match ID (not used as a feature) so that anyone can
+            confirm no match appears in both; Figures 5 and 6 show the first rows of each.
           </p>
           <div className="raw-clean-grid">
             <Figure
@@ -911,6 +1040,30 @@ function App() {
               name="train-test-split.png"
               alt="Bar charts showing the sizes of the training and testing sets and their class balance"
               caption="Figure 4: The 70/30 split and the class balance within each half. The two sets share no match, and both preserve the same near-even division between the outcomes."
+              wide
+            />
+            <Figure
+              name="train-set-sample.png"
+              alt="Table image of the first rows of the training set with match IDs and labels"
+              caption="Figure 5: The first rows of the training set, which is the only data the model learns from. The match ID identifies each fixture and is not given to the model."
+              wide
+            />
+            <Figure
+              name="test-set-sample.png"
+              alt="Table image of the first rows of the testing set with match IDs and labels"
+              caption="Figure 6: The first rows of the testing set, held back until the model is finished. None of these match IDs appears anywhere in the training set."
+              wide
+            />
+            <Figure
+              name="nb-multinomial-input.png"
+              alt="Table image of training rows rescaled to the range zero to one"
+              caption="Figure 7: Training rows as the multinomial model receives them, with every column rescaled onto 0 to 1. This keeps every value non-negative, which the multinomial model requires."
+              wide
+            />
+            <Figure
+              name="nb-bernoulli-input.png"
+              alt="Table image of training rows converted to zeros and ones"
+              caption="Figure 8: Training rows as the Bernoulli model receives them, with every value reduced to 0 or 1. A 1 means the value was above the training-set median, or yes for the three context columns."
               wide
             />
           </div>
@@ -968,7 +1121,7 @@ function App() {
               <Figure
                 name="nb-confusion-matrices.png"
                 alt="Three confusion matrices, one per Naive Bayes variant"
-                caption="Figure 5: Confusion matrices for all three variants, with counts and row percentages. The diagonal holds correct predictions and the off-diagonal the mistakes, broken down by which outcome was missed."
+                caption="Figure 9: Confusion matrices for all three variants, with counts and row percentages. The diagonal holds correct predictions and the off-diagonal the mistakes, broken down by which outcome was missed."
                 wide
               />
               <p>
@@ -1010,7 +1163,12 @@ function App() {
             chased down were easier to spot than totals that would be defended, which says that a
             weak first innings is more diagnostic than a strong one. A side that bats poorly has
             usually settled its own fate; a side that bats well has only made its opponent&apos;s
-            task harder. The three variants landing within two points of each other, despite
+            task harder. The three variants landing within{' '}
+            {nb
+              ? Math.round(100 * (Math.max(...Object.values(nb).map((m) => m.accuracy))
+                  - Math.min(...Object.values(nb).map((m) => m.accuracy))))
+              : 'a few'}{' '}
+            points of each other, despite
             assuming quite different things about the data, suggests the signal is spread across
             several measurements rather than concentrated in one. That the independence assumption
             is violated and the model works anyway is a reminder that a classifier only has to
@@ -1033,6 +1191,16 @@ function App() {
       ? treeNames.reduce((best, name) => (trees[name].accuracy > trees[best].accuracy ? name : best))
       : null
     const bestTree = bestTreeName ? trees[bestTreeName] : null
+    // Share of each actual outcome the tree labelled correctly (row 0 is
+    // Chased, row 1 is Defended), so the caption always matches the matrices.
+    const recall = (matrix, row) => matrix[row][row] / (matrix[row][0] + matrix[row][1])
+    const confusionCaption = trees
+      ? 'Figure 10: Confusion matrices for the three trees on the held-out testing set. '
+        + treeNames.map((name) => {
+          const matrix = trees[name].confusion_matrix
+          return `${name.split(' - ')[0]} identifies ${percent(recall(matrix, 0), 0)} of chased totals and ${percent(recall(matrix, 1), 0)} of defended ones`
+        }).join('; ') + '.'
+      : ''
     return (
       <section className="content-panel assignment-panel">
         <header className="assignment-heading">
@@ -1067,6 +1235,11 @@ function App() {
             because it avoids logarithms, while entropy penalises mixed nodes slightly more
             sharply.
           </p>
+          <Figure
+            name="concept-impurity-curves.png"
+            alt="Line chart of Gini impurity and entropy against the share of one class in a node"
+            caption="Figure 1: Gini impurity and entropy for a two-class node as the share of one class moves from 0 to 1. Both are zero for a pure node and highest for an even 50/50 mix, which is why a good split is one that moves its children toward the edges of this chart."
+          />
           <p>
             <strong>Information gain</strong> turns impurity into a decision rule. It is the
             impurity of the parent node minus the weighted average impurity of the children it
@@ -1101,7 +1274,9 @@ function App() {
           <Figure
             name="impurity-example.png"
             alt="Worked example of Gini, entropy and information gain for a single split"
-            caption="Figure 1: A real split from the training data worked through in full, splitting on first-innings run rate at the median. The parent node is almost perfectly balanced, so its entropy starts at its two-class maximum. The split lifts information gain to 0.0735 bits and drops the weighted Gini by 0.0501."
+            caption={impurity
+              ? `Figure 2: A real split from the training data worked through in full, splitting on first-innings run rate at its median. The split gains ${impurity.information_gain.toFixed(4)} bits of information and lowers the weighted Gini by ${(impurity.parent_gini - impurity.weighted_child_gini).toFixed(4)}.`
+              : 'Figure 2: A real split from the training data worked through in full.'}
             wide
           />
           <p>
@@ -1119,18 +1294,6 @@ function App() {
             gives no guarantee of the best tree overall, and it is why the three trees below differ
             despite being built from identical data.
           </p>
-          <div className="analysis-figure-grid">
-            <Figure
-              name="dt-feature-importance.png"
-              alt="Horizontal bar chart of feature importance in the best tree"
-              caption="Figure 2: How much each measurement contributed to the best-performing tree's total impurity reduction. Run rate dominates, which is why it appears at the root of every tree built here."
-            />
-            <Figure
-              name="dt-depth-curve.png"
-              alt="Line chart of training and testing accuracy against maximum tree depth"
-              caption="Figure 3: Training and testing accuracy as the depth limit is raised from 1 to 20. The training line climbs toward perfection while the testing line peaks early and then declines, which is overfitting made visible."
-            />
-          </div>
         </section>
 
         <section className="assignment-section">
@@ -1153,20 +1316,32 @@ function App() {
             exactly the same rows. The two sets must be <strong>disjoint</strong> because a tree
             grown deep enough can memorise its training data perfectly, reaching
             {depthStudy ? ` ${percent(depthStudy.deep_train_accuracy)} ` : ' '}
-            training accuracy while performing far worse on unseen matches. Figure 3 above shows
+            training accuracy while performing far worse on unseen matches. Figure 12 in the Results shows
             precisely that gap opening, and it is only visible because the test rows were held back.
           </p>
           <div className="raw-clean-grid">
             <Figure
               name="supervised-data-sample.png"
               alt="Table image showing labelled rows with the label column first"
-              caption="Figure 4: The labelled input, identical to the table used for Naive Bayes. Keeping the two methods on the same rows is what makes their accuracies directly comparable."
+              caption="Figure 3: The labelled input, identical to the table used for Naive Bayes. Keeping the two methods on the same rows is what makes their accuracies directly comparable."
               wide
             />
             <Figure
               name="train-test-split.png"
               alt="Bar charts showing training and testing set sizes and class balance"
-              caption="Figure 5: The same disjoint, stratified 70/30 split reused here. No match appears in both halves, which is what makes the reported accuracy an honest estimate."
+              caption="Figure 4: The same disjoint, stratified 70/30 split reused here. No match appears in both halves, which is what makes the reported accuracy an honest estimate."
+              wide
+            />
+            <Figure
+              name="train-set-sample.png"
+              alt="Table image of the first rows of the training set with match IDs and labels"
+              caption="Figure 5: The first rows of the training set the trees are grown from. The match ID identifies each fixture and is not given to the model."
+              wide
+            />
+            <Figure
+              name="test-set-sample.png"
+              alt="Table image of the first rows of the testing set with match IDs and labels"
+              caption="Figure 6: The first rows of the testing set used to score the finished trees. None of these match IDs appears anywhere in the training set."
               wide
             />
           </div>
@@ -1184,11 +1359,12 @@ function App() {
           <p>
             Written in Python, using <em>scikit-learn</em> for the tree implementation, the
             impurity criteria, the plotting of each tree and the evaluation measures. The worked
-            Gini and entropy example in Figure 1 is computed directly with <em>NumPy</em> rather
+            Gini and entropy example in Figure 2 is computed directly with <em>NumPy</em> rather
             than read out of the library, so the arithmetic can be checked.
           </p>
           <CodeLinks items={[
             { file: 'supervised_models.py', label: 'supervised_models.py — Naive Bayes and Decision Trees' },
+            { file: 'concept_figures.py', label: 'concept_figures.py — overview diagrams' },
             { file: 'build_dataset.py', label: 'build_dataset.py — upstream data pipeline' },
           ]} />
         </section>
@@ -1201,7 +1377,8 @@ function App() {
                 Three trees were built from the same training data, differing in their impurity
                 criterion and in how far they were allowed to grow. Tree A uses Gini and stops at
                 depth 3. Tree B uses entropy and stops at depth 4. Tree C uses Gini, is allowed to
-                reach depth 6, and requires at least 40 matches in every leaf.
+                reach depth 6, and requires at least 40 matches in every leaf. Select any tree to
+                open it at full size, where every node can be read.
               </p>
               <div className="metric-strip">
                 {treeNames.map((name) => (
@@ -1215,28 +1392,40 @@ function App() {
                 <Figure
                   name="dt-tree-a-gini-depth3.png"
                   alt="Decision tree diagram using Gini impurity limited to depth three"
-                  caption="Figure 6: Tree A, the shallowest and most readable of the three, with eight leaves. It splits first on run rate, then on runs scored, which is the pattern every tree here repeats."
+                  caption="Figure 7: Tree A, the shallowest and most readable of the three, with eight leaves. It splits first on run rate, then on runs scored, which is the pattern every tree here repeats."
                   wide
                 />
                 <Figure
                   name="dt-tree-b-entropy-depth4.png"
                   alt="Decision tree diagram using entropy limited to depth four"
-                  caption="Figure 7: Tree B, grown one level deeper using entropy rather than Gini. The extra depth nearly doubles the number of leaves without improving accuracy on unseen matches."
+                  caption="Figure 8: Tree B, grown one level deeper using entropy rather than Gini. The extra depth nearly doubles the number of leaves without improving accuracy on unseen matches."
                   wide
                 />
                 <Figure
                   name="dt-tree-c-gini-depth6.png"
                   alt="Decision tree diagram using Gini to depth six with a minimum leaf size"
-                  caption="Figure 8: Tree C, allowed to reach depth 6 but required to keep at least 40 matches in every leaf. The minimum leaf size is what stops it from fragmenting into tiny unreliable groups."
+                  caption="Figure 9: Tree C, allowed to reach depth 6 but required to keep at least 40 matches in every leaf. The minimum leaf size is what stops it from fragmenting into tiny unreliable groups."
                   wide
                 />
               </div>
               <Figure
                 name="dt-confusion-matrices.png"
                 alt="Three confusion matrices, one for each decision tree"
-                caption="Figure 9: Confusion matrices for the three trees on the held-out testing set. All three share the same tendency to identify totals that will be chased slightly more reliably than totals that will be defended."
+                caption={confusionCaption}
                 wide
               />
+              <div className="analysis-figure-grid">
+                <Figure
+                  name="dt-feature-importance.png"
+                  alt="Horizontal bar chart of feature importance in the best tree"
+                  caption="Figure 11: How much each measurement contributed to the best-performing tree's total impurity reduction. Run rate contributes the most and runs scored almost as much, which matches every tree here splitting on run rate first and runs second."
+                />
+                <Figure
+                  name="dt-depth-curve.png"
+                  alt="Line chart of training and testing accuracy against maximum tree depth"
+                  caption="Figure 12: Training and testing accuracy as the depth limit is raised from 1 to 20. The training line climbs toward perfection while the testing line peaks early and then declines, which is overfitting made visible."
+                />
+              </div>
               <p>
                 The best of the three was <strong>{bestTreeName.split(' - ')[0]}</strong>{' '}
                 at <strong>{percent(bestTree.accuracy)}</strong>, against the
@@ -1246,7 +1435,7 @@ function App() {
                 scoring lowest on its own training data, and the gap between its training and
                 testing accuracy is only{' '}
                 {((bestTree.train_accuracy - bestTree.accuracy) * 100).toFixed(1)}{' '}
-                points. Figure 3 extends this across every depth from 1 to 20: training accuracy
+                points. Figure 12 extends this across every depth from 1 to 20: training accuracy
                 rises toward {depthStudy ? percent(depthStudy.deep_train_accuracy) : ''} while
                 testing accuracy peaks at depth {depthStudy ? depthStudy.best_depth : ''} and then
                 falls to {depthStudy ? percent(depthStudy.deep_test_accuracy) : ''}. The deepest
@@ -1348,8 +1537,9 @@ function App() {
         <h4>How to reproduce everything on this site</h4>
         <ol>
           <li>Install the Python packages listed in <code>requirements.txt</code>.</li>
-          <li>Run <code>build_dataset.py</code> to download the archives, call both APIs and write the raw and cleaned files.</li>
+          <li>Run <code>build_dataset.py</code> to download the archives, call both APIs and write the raw and cleaned files. Add <code>--from-raw</code> to re-clean the published raw file instead of downloading, and <code>--skip-weather</code> to keep the published weather file.</li>
           <li>Run <code>eda_cricket.py</code> for the exploratory figures.</li>
+          <li>Run <code>concept_figures.py</code> for the explanatory diagrams in the Overview sections.</li>
           <li>Run <code>clustering_pca.py</code> for the clustering, PCA and SVD results.</li>
           <li>Run <code>supervised_models.py</code> for the Naive Bayes and Decision Tree results.</li>
         </ol>
@@ -1357,6 +1547,7 @@ function App() {
       <CodeLinks items={[
         { file: 'build_dataset.py', label: 'build_dataset.py' },
         { file: 'eda_cricket.py', label: 'eda_cricket.py' },
+        { file: 'concept_figures.py', label: 'concept_figures.py' },
         { file: 'clustering_pca.py', label: 'clustering_pca.py' },
         { file: 'supervised_models.py', label: 'supervised_models.py' },
         { file: 'plot_style.py', label: 'plot_style.py' },
@@ -1421,14 +1612,14 @@ function App() {
         </div>
         <nav className="tab-nav" aria-label="Project navigation">
           {tabs.map((tab) => (
-            <button
+            <a
               key={tab}
-              type="button"
+              href={tabHref(tab)}
               className={activeTab === tab ? 'tab-button active' : 'tab-button'}
-              onClick={() => setActiveTab(tab)}
+              aria-current={activeTab === tab ? 'page' : undefined}
             >
               {tab}
-            </button>
+            </a>
           ))}
         </nav>
       </aside>

@@ -127,6 +127,9 @@
 }
 
 .tab-button {
+  display: block;
+  box-sizing: border-box;
+  text-decoration: none;
   width: 100%;
   border: 1px solid rgba(148, 163, 184, 0.14);
   background: rgba(15, 23, 42, 0.72);
@@ -870,6 +873,11 @@
   line-height: 1.8;
 }
 
+/* Visible space between consecutive paragraphs. */
+.assignment-section p + p {
+  margin-top: 1em;
+}
+
 .assignment-section {
   padding: 24px 0;
   border-bottom: 1px solid rgba(148, 163, 184, 0.16);
@@ -939,7 +947,7 @@
 
 .metric-strip {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 12px;
   margin: 18px 0;
 }
@@ -967,8 +975,31 @@
   grid-column: 1 / -1;
 }
 
-.analysis-figure-grid .wide-figure img {
-  aspect-ratio: 16 / 8;
+/* Full-width figures keep their own shape, so wide tables and tree diagrams
+   are not shrunk into a fixed box with empty bands above and below. */
+.analysis-figure-grid .wide-figure img,
+.raw-clean-grid .wide-figure img {
+  aspect-ratio: auto;
+}
+
+.figure-card img {
+  width: 100%;
+  height: auto;
+  background: #f4f1e8;
+}
+
+.sources-block ol {
+  padding-left: 22px;
+  display: grid;
+  gap: 8px;
+  color: #dbeafe;
+  line-height: 1.7;
+  font-size: 0.92rem;
+}
+
+.sources-block a {
+  color: #a5f3fc;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 980px) {
@@ -980,6 +1011,20 @@
     position: static;
     width: 100%;
     min-width: 0;
+    box-sizing: border-box;
+  }
+
+  /* Let the content column shrink to the screen instead of being pushed
+     wider by long code lines or wide tables. */
+  .content-wrap {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .assignment-panel code,
+  .api-box code {
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   .summary-grid,
@@ -1012,8 +1057,15 @@
     grid-template-columns: 1fr;
   }
 
-  .analysis-figure-grid .figure-card img,
-  .analysis-figure-grid .wide-figure img {
+  .content-panel {
+    padding: 18px;
+  }
+
+  .tab-nav {
+    max-height: none;
+  }
+
+  .analysis-figure-grid .figure-card:not(.wide-figure) img {
     aspect-ratio: 4 / 3;
   }
 

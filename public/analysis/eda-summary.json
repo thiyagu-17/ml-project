@@ -11,7 +11,12 @@
     "2026-10-25"
   ],
   "venues": 375,
+  "raw_venues": 521,
+  "venues_after_merge": 380,
+  "venue_spellings_merged": 141,
   "cities": 271,
+  "weather_rows": 2354,
+  "bowled_out_short_innings_removed": 75,
   "teams": 111,
   "formats": {
     "T20": 3331,
@@ -27,6 +32,11 @@
   },
   "toss_winner_win_rate": 0.5026,
   "toss_chose_to_bat_rate": 0.4853,
+  "toss_decision_win_rate": {
+    "bat": 0.4939,
+    "field": 0.5109
+  },
+  "t20_majority_since": 2019,
   "median_runs": {
     "ODI": 250.0,
     "T20": 151.0

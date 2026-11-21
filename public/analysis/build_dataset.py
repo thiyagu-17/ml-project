@@ -4,23 +4,34 @@ Sources
 -------
 1. Cricsheet ball-by-ball archives (bulk download, https://cricsheet.org/downloads/).
 2. CricAPI current-matches endpoint (REST API, requires CRICAPI_KEY).
+3. Open-Meteo geocoding and historical-weather archive (REST API, no key).
 
 Outputs (written to public/data/)
 ---------------------------------
 cricsheet-matches-raw.csv     flattened match table before cleaning
 cricsheet-matches-clean.csv   analysis-ready match table
-cricapi-current-raw.csv       raw CricAPI snapshot
+cricapi-current-snapshot.csv  raw CricAPI response, one row per innings
+cricapi-current-clean.csv     CricAPI innings cleaned to ODI/T20 with run rates
+venue-weather.csv             match-day weather for the busiest host cities
 dataset-summary.json          row counts and class balance used by the website
 
-Run:  python public/analysis/build_dataset.py
+Run:  python public/analysis/build_dataset.py [--from-raw] [--skip-weather]
+
+--from-raw      re-clean the committed raw CSV instead of downloading and
+                re-parsing the archives (Cricsheet keeps adding matches, so a
+                fresh download produces a larger raw file than the one on the site)
+--skip-weather  do not call Open-Meteo; keep the committed venue-weather.csv
 """
 
 from __future__ import annotations
 
+import argparse
 import csv
 import io
 import json
 import os
+import re
+import time
 import zipfile
 from collections import defaultdict
 from pathlib import Path
@@ -41,6 +52,14 @@ CRICSHEET_ARCHIVES = {
 }
 
 CRICAPI_URL = "https://api.cricapi.com/v1/currentMatches"
+OPEN_METEO_GEOCODE_URL = "https://geocoding-api.open-meteo.com/v1/search"
+OPEN_METEO_ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
+
+# Weather is collected for every host city with at least this many cleaned
+# matches. Cities whose name cannot be geocoded are skipped and reported.
+WEATHER_MIN_MATCHES = 38
+WEATHER_COLUMNS = ["city", "date", "latitude", "longitude",
+                   "temp_max_c", "temp_min_c", "precipitation_mm"]
 
 # Overs that count as the fielding-restriction powerplay in each format.
 POWERPLAY_OVERS = {"ODI": 10.0, "T20": 6.0, "IT20": 6.0}
@@ -255,8 +274,11 @@ def canonical_venues(venues: pd.Series) -> pd.Series:
     return venues.replace(mapping)
 
 
-def clean_matches(raw: pd.DataFrame) -> pd.DataFrame:
-    """Apply the documented cleaning rules and return the analysis table."""
+def clean_matches(raw: pd.DataFrame, report: dict | None = None) -> pd.DataFrame:
+    """Apply the documented cleaning rules and return the analysis table.
+
+    If ``report`` is given, counts from individual rules are written into it.
+    """
     frame = raw.copy()
 
     # 1. Normalise text columns and resolve known team-name aliases.
@@ -309,10 +331,18 @@ def clean_matches(raw: pd.DataFrame) -> pd.DataFrame:
     frame = frame[frame["first_innings_team"] != ""]
     frame = frame[frame["second_innings_team"] != ""]
 
-    # 6. Drop innings that were cut far short of the scheduled allocation; a
-    #    20-ball innings is a rain-affected fragment, not a contest.
+    # 6. Keep only first innings that reached at least 60 percent of the
+    #    scheduled overs, so every total is compared with full-length innings.
+    #    This removes interrupted fragments, and it also removes innings that
+    #    ended early because the side was bowled out. Those are genuine results
+    #    (almost all chased down), so how many were removed is reported.
     expected_balls = frame["scheduled_overs"].fillna(50) * 6
-    frame = frame[frame["first_innings_balls"] >= 0.6 * expected_balls]
+    short = frame["first_innings_balls"] < 0.6 * expected_balls
+    if report is not None:
+        report["short_innings_removed"] = int(short.sum())
+        report["bowled_out_short_innings_removed"] = int(
+            (short & (frame["first_innings_wickets"] == 10)).sum())
+    frame = frame[~short]
 
     # 7. Remove exact duplicate fixtures.
     frame = frame.drop_duplicates(subset=["match_id"], keep="first")
@@ -334,12 +364,12 @@ def clean_matches(raw: pd.DataFrame) -> pd.DataFrame:
     frame["second_innings_run_rate"] = (
         frame["second_innings_runs"] / (frame["second_innings_balls"] / 6.0)
     ).round(3)
-    frame["powerplay_run_rate"] = (
-        frame["powerplay_runs"] / POWERPLAY_OVERS.get("ODI", 10.0)
-    ).round(3)
-    frame.loc[frame["match_type"] == "T20", "powerplay_run_rate"] = (
-        frame.loc[frame["match_type"] == "T20", "powerplay_runs"] / 6.0
-    ).round(3)
+    # The powerplay lasts 10 overs in an ODI and 6 in a T20, or less if the
+    # side was bowled out before it ended.
+    powerplay_length = np.where(frame["match_type"] == "T20",
+                                POWERPLAY_OVERS["T20"], POWERPLAY_OVERS["ODI"])
+    powerplay_length = np.minimum(powerplay_length, frame["first_innings_balls"] / 6.0)
+    frame["powerplay_run_rate"] = (frame["powerplay_runs"] / powerplay_length).round(3)
     frame["boundary_runs"] = frame["first_innings_fours"] * 4 + frame["first_innings_sixes"] * 6
     frame["boundary_share"] = (frame["boundary_runs"] / frame["first_innings_runs"]).round(4)
     frame["dot_ball_share"] = (frame["first_innings_dots"] / frame["first_innings_balls"]).round(4)
@@ -383,6 +413,10 @@ def clean_matches(raw: pd.DataFrame) -> pd.DataFrame:
 def fetch_cricapi_snapshot() -> pd.DataFrame | None:
     """Fetch the CricAPI current-matches endpoint when a key is available.
 
+    The response is stored as returned, one row per innings, so nothing is lost
+    before cleaning. Overs stay in cricket notation here (20.4 means 20 overs
+    and 4 balls); ``clean_cricapi`` converts them.
+
     Example request:
         GET https://api.cricapi.com/v1/currentMatches?apikey=<KEY>&offset=0
     """
@@ -393,52 +427,224 @@ def fetch_cricapi_snapshot() -> pd.DataFrame | None:
     response = requests.get(CRICAPI_URL, params={"apikey": api_key, "offset": 0}, timeout=60)
     response.raise_for_status()
     payload = response.json()
-    records = payload.get("data") or []
+    if payload.get("status") != "success":
+        # The error text can echo the request, so it is not printed.
+        print("  CricAPI returned no data - keeping the committed snapshot", flush=True)
+        return None
     rows = []
-    for record in records:
+    for record in payload.get("data") or []:
         teams = record.get("teams") or []
-        score = record.get("score") or []
-        rows.append({
+        base = {
+            "match_id": record.get("id", ""),
             "match_name": record.get("name", ""),
             "status": record.get("status", ""),
             "venue": record.get("venue", ""),
-            "team_1": teams[0] if len(teams) > 0 else "",
-            "team_2": teams[1] if len(teams) > 1 else "",
             "date": record.get("date", ""),
             "match_type": record.get("matchType", ""),
-            "innings_runs": sum(int(entry.get("r", 0) or 0) for entry in score),
-            "innings_wickets": sum(int(entry.get("w", 0) or 0) for entry in score),
-        })
+            "team_1": teams[0] if len(teams) > 0 else "",
+            "team_2": teams[1] if len(teams) > 1 else "",
+        }
+        for entry in record.get("score") or [{}]:
+            rows.append({**base,
+                         "inning": entry.get("inning", ""),
+                         "runs": entry.get("r", ""),
+                         "wickets": entry.get("w", ""),
+                         "overs": entry.get("o", "")})
     return pd.DataFrame(rows)
+
+
+def overs_to_balls(overs) -> float:
+    """Convert cricket over notation (20.4 = 20 overs + 4 balls) into balls."""
+    if pd.isna(overs):
+        return np.nan
+    whole = int(overs)
+    extra = int(round((float(overs) - whole) * 10))
+    if not 0 <= extra <= 5:
+        return np.nan
+    return float(whole * 6 + extra)
+
+
+def infer_match_type(match_type, match_name) -> str:
+    """Use the API's format, or read it from the match name when it is missing."""
+    value = str(match_type or "").strip().upper()
+    if value in {"ODI", "T20"}:
+        return value
+    name = str(match_name or "").upper()
+    if re.search(r"\bODI\b", name):
+        return "ODI"
+    if re.search(r"\bT20", name):
+        return "T20"
+    return value
+
+
+def resolve_batting_teams(frame: pd.DataFrame) -> pd.Series:
+    """Name the batting side of each innings using the match's own team list.
+
+    The API labels innings inconsistently: sometimes in lower case, and
+    sometimes with both team names ("A,B Inning 1"). A label that matches one
+    team is mapped to that team's proper spelling; a label naming both teams is
+    resolved to whichever team has not already batted in that match.
+    """
+    labels = (frame["inning"].fillna("").astype(str)
+              .str.replace(r"\s+Inning\s+\d+\s*$", "", regex=True).str.strip())
+    resolved = pd.Series("", index=frame.index, dtype=object)
+    for index, label in labels.items():
+        for team in (frame.at[index, "team_1"], frame.at[index, "team_2"]):
+            if isinstance(team, str) and label.lower() == team.strip().lower():
+                resolved[index] = team.strip()
+    for _, group in frame.groupby("match_id"):
+        teams = {str(t).strip() for t in group[["team_1", "team_2"]].iloc[0] if isinstance(t, str)}
+        known = set(resolved[group.index]) - {""}
+        for index in group.index:
+            if not resolved[index] and len(teams - known) == 1:
+                resolved[index] = (teams - known).pop()
+    return resolved
+
+
+def clean_cricapi(raw: pd.DataFrame) -> pd.DataFrame:
+    """Keep scored ODI and T20 innings and derive a correct run rate."""
+    frame = raw.copy()
+    frame["match_type"] = [infer_match_type(t, n)
+                           for t, n in zip(frame["match_type"], frame["match_name"])]
+    frame = frame[frame["match_type"].isin(["ODI", "T20"])].copy()
+    for column in ["runs", "wickets", "overs"]:
+        frame[column] = pd.to_numeric(frame[column], errors="coerce")
+    frame = frame.dropna(subset=["runs", "wickets", "overs"])
+    frame["balls"] = frame["overs"].map(overs_to_balls)
+    frame = frame[(frame["balls"] > 0) & frame["wickets"].between(0, 10) & (frame["runs"] >= 0)].copy()
+    frame["batting_team"] = resolve_batting_teams(frame)
+    frame = frame[frame["batting_team"] != ""]
+    frame["overs_decimal"] = (frame["balls"] / 6.0).round(3)
+    frame["run_rate"] = (frame["runs"] / (frame["balls"] / 6.0)).round(3)
+    frame = frame.drop_duplicates(subset=["match_id", "inning"])
+    columns = ["match_id", "match_name", "status", "venue", "date", "match_type",
+               "batting_team", "runs", "wickets", "overs", "balls", "overs_decimal", "run_rate"]
+    return frame[columns].reset_index(drop=True)
+
+
+def fetch_weather(clean: pd.DataFrame, cache_path: Path) -> pd.DataFrame:
+    """Daily weather on every match day in the busiest host cities.
+
+    Rows already in ``cache_path`` are reused, so only new cities or new match
+    dates are requested from the API.
+
+    Example requests:
+        GET https://geocoding-api.open-meteo.com/v1/search?name=Mumbai&count=1
+        GET https://archive-api.open-meteo.com/v1/archive?latitude=19.07&longitude=72.87
+            &start_date=2015-01-01&end_date=2015-12-31
+            &daily=temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=UTC
+    """
+    if cache_path.exists():
+        cached = pd.read_csv(cache_path)
+    else:
+        cached = pd.DataFrame(columns=WEATHER_COLUMNS)
+    counts = clean["city"].value_counts()
+    cities = [city for city, count in counts.items() if count >= WEATHER_MIN_MATCHES]
+
+    frames = [cached]
+    for city in cities:
+        needed = set(clean.loc[clean["city"] == city, "date"])
+        have = set(cached.loc[cached["city"] == city, "date"])
+        missing = sorted(needed - have)
+        if not missing:
+            continue
+
+        known = cached.loc[cached["city"] == city, ["latitude", "longitude"]]
+        if len(known):
+            latitude, longitude = (float(v) for v in known.iloc[0])
+        else:
+            reply = requests.get(OPEN_METEO_GEOCODE_URL,
+                                 params={"name": city, "count": 1, "format": "json"}, timeout=60)
+            reply.raise_for_status()
+            results = reply.json().get("results") or []
+            if not results:
+                print(f"    weather: no coordinates found for {city!r}, skipped", flush=True)
+                continue
+            latitude = round(float(results[0]["latitude"]), 3)
+            longitude = round(float(results[0]["longitude"]), 3)
+
+        reply = requests.get(OPEN_METEO_ARCHIVE_URL, params={
+            "latitude": latitude, "longitude": longitude,
+            "start_date": missing[0], "end_date": missing[-1],
+            "daily": "temperature_2m_max,temperature_2m_min,precipitation_sum",
+            "timezone": "UTC",
+        }, timeout=180)
+        reply.raise_for_status()
+        daily = pd.DataFrame(reply.json().get("daily") or {})
+        time.sleep(0.5)
+        if daily.empty:
+            continue
+        daily = daily.rename(columns={"time": "date", "temperature_2m_max": "temp_max_c",
+                                      "temperature_2m_min": "temp_min_c",
+                                      "precipitation_sum": "precipitation_mm"})
+        daily = daily[daily["date"].isin(missing)].assign(
+            city=city, latitude=latitude, longitude=longitude)
+        print(f"    weather: {city} +{len(daily)} match days", flush=True)
+        frames.append(daily[WEATHER_COLUMNS])
+
+    weather = pd.concat(frames, ignore_index=True)
+    # Keep only match days still present in the cleaned table, and only
+    # complete readings, so the file has no empty cells.
+    keys = set(zip(clean["city"], clean["date"]))
+    in_clean = [key in keys for key in zip(weather["city"], weather["date"])]
+    weather = weather[in_clean]
+    weather = weather[weather["city"].isin(cities)]
+    weather = weather.dropna().drop_duplicates(subset=["city", "date"])
+    return weather.sort_values(["city", "date"]).reset_index(drop=True)
 
 
 # --------------------------------------------------------------------------
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Build the cricket match dataset.")
+    parser.add_argument("--from-raw", action="store_true",
+                        help="re-clean the committed raw CSV instead of re-downloading")
+    parser.add_argument("--skip-weather", action="store_true",
+                        help="keep the committed venue-weather.csv")
+    args = parser.parse_args()
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-    print("1. Downloading Cricsheet archives", flush=True)
-    archives = download_archives()
+    if args.from_raw:
+        print("1-2. Reading the committed raw table", flush=True)
+        raw = pd.read_csv(DATA_DIR / "cricsheet-matches-raw.csv", low_memory=False)
+    else:
+        print("1. Downloading Cricsheet archives", flush=True)
+        archives = download_archives()
 
-    print("2. Parsing ball-by-ball data", flush=True)
-    records: list[dict] = []
-    for name, path in archives.items():
-        records.extend(parse_archive(name, path))
-    raw = pd.DataFrame(records)
-    raw.to_csv(DATA_DIR / "cricsheet-matches-raw.csv", index=False)
+        print("2. Parsing ball-by-ball data", flush=True)
+        records: list[dict] = []
+        for name, path in archives.items():
+            records.extend(parse_archive(name, path))
+        raw = pd.DataFrame(records)
+        raw.to_csv(DATA_DIR / "cricsheet-matches-raw.csv", index=False)
     print(f"   raw rows: {len(raw)}", flush=True)
 
     print("3. Cleaning", flush=True)
-    clean = clean_matches(raw)
+    cleaning_report: dict = {}
+    clean = clean_matches(raw, cleaning_report)
     clean.to_csv(DATA_DIR / "cricsheet-matches-clean.csv", index=False)
     print(f"   clean rows: {len(clean)}", flush=True)
 
     print("4. CricAPI snapshot", flush=True)
     snapshot = fetch_cricapi_snapshot()
+    snapshot_path = DATA_DIR / "cricapi-current-snapshot.csv"
     if snapshot is not None:
-        snapshot.to_csv(DATA_DIR / "cricapi-current-raw.csv", index=False)
-        print(f"   api rows: {len(snapshot)}", flush=True)
+        snapshot.to_csv(snapshot_path, index=False)
+        print(f"   api innings rows: {len(snapshot)}", flush=True)
+    if snapshot_path.exists() and "inning" in pd.read_csv(snapshot_path, nrows=0).columns:
+        api_clean = clean_cricapi(pd.read_csv(snapshot_path))
+        api_clean.to_csv(DATA_DIR / "cricapi-current-clean.csv", index=False)
+        print(f"   api innings after cleaning: {len(api_clean)}", flush=True)
+
+    print("5. Open-Meteo weather", flush=True)
+    if args.skip_weather:
+        print("   skipped - keeping the committed venue-weather.csv", flush=True)
+    else:
+        weather = fetch_weather(clean, DATA_DIR / "venue-weather.csv")
+        weather.to_csv(DATA_DIR / "venue-weather.csv", index=False)
+        print(f"   weather rows: {len(weather)} across {weather['city'].nunique()} cities",
+              flush=True)
 
     summary = {
         "raw_rows": int(len(raw)),
@@ -452,6 +658,7 @@ def main() -> None:
         "venues": int(clean["venue"].nunique()),
         "teams": int(pd.concat([clean["team_a"], clean["team_b"]]).nunique()),
         "label_balance": clean["result_label"].value_counts().to_dict(),
+        **cleaning_report,
     }
     with open(DATA_DIR / "dataset-summary.json", "w", encoding="utf-8") as handle:
         json.dump(summary, handle, indent=2)

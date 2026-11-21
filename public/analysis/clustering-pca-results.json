@@ -18,7 +18,7 @@
   "kmeans": [
     {
       "k": 2,
-      "silhouette": 0.3031,
+      "silhouette": 0.3077,
       "inertia": 46750.1
     },
     {
@@ -28,36 +28,41 @@
     },
     {
       "k": 4,
-      "silhouette": 0.2495,
+      "silhouette": 0.2519,
       "inertia": 31282.0
     },
     {
       "k": 5,
-      "silhouette": 0.2206,
+      "silhouette": 0.2211,
       "inertia": 28183.7
     },
     {
       "k": 6,
-      "silhouette": 0.1987,
+      "silhouette": 0.1967,
       "inertia": 26679.0
     },
     {
       "k": 7,
-      "silhouette": 0.1688,
+      "silhouette": 0.1668,
       "inertia": 25295.3
     },
     {
       "k": 8,
-      "silhouette": 0.1639,
+      "silhouette": 0.1615,
       "inertia": 24203.7
     }
   ],
   "kmeans_best_k": 2,
-  "kmeans_best_silhouette": 0.3031,
+  "kmeans_best_silhouette": 0.3077,
+  "silhouette_tie_tolerance": 0.01,
+  "methods_agree_on_k": true,
+  "kmeans_tied_with_hierarchical_k": false,
+  "chosen_k": 2,
+  "chosen_k_kmeans_silhouette": 0.3077,
   "headline_k": {
-    "2": 0.3031,
+    "2": 0.3077,
     "3": 0.2999,
-    "4": 0.2495
+    "4": 0.2519
   },
   "hierarchical": [
     {

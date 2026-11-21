@@ -78,21 +78,8 @@ def shorten(text: str, limit: int = 28) -> str:
     return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
 
 
-def table_figure(frame, filename: str, title: str, subtitle: str = "",
-                 max_columns: int = 8, width: float = 13.0) -> None:
-    """Render a small slice of a dataframe as a readable table image.
-
-    Only the first ``max_columns`` columns are drawn; a wide frame is reported
-    in the subtitle instead of being squeezed into unreadable text.
-    """
-    display = frame.iloc[:, :max_columns].copy()
-    for column in display.columns:
-        display[column] = display[column].map(lambda v: shorten(v, 20))
-
-    height = 0.72 + 0.30 * len(display)
-    figure, axis = plt.subplots(figsize=(width, height))
+def _draw_table(axis, display, fontsize: float) -> None:
     axis.axis("off")
-
     table = axis.table(
         cellText=display.values,
         colLabels=[shorten(c, 18) for c in display.columns],
@@ -100,7 +87,7 @@ def table_figure(frame, filename: str, title: str, subtitle: str = "",
         cellLoc="center",
     )
     table.auto_set_font_size(False)
-    table.set_fontsize(8.5)
+    table.set_fontsize(fontsize)
     table.scale(1, 1.5)
 
     for (row, _), cell in table.get_celld().items():
@@ -112,6 +99,40 @@ def table_figure(frame, filename: str, title: str, subtitle: str = "",
         else:
             cell.set_facecolor("#fbfaf6" if row % 2 else "#f0ece0")
 
+
+def table_figure(frame, filename: str, title: str, subtitle: str = "",
+                 max_columns: int = 8, width: float = 13.0,
+                 wrap_columns: int | None = None, fontsize: float = 8.5) -> None:
+    """Render a small slice of a dataframe as a readable table image.
+
+    Only the first ``max_columns`` columns are drawn; a wide frame is reported
+    in the subtitle instead of being squeezed into unreadable text.
+
+    With ``wrap_columns`` every column is drawn, split into stacked blocks of
+    that many columns. The first column (a label or an ID) is repeated at the
+    start of each block so every row can still be read across.
+    """
+    if wrap_columns is None:
+        blocks = [frame.iloc[:, :max_columns]]
+    else:
+        key, rest = frame.columns[0], list(frame.columns[1:])
+        step = max(1, wrap_columns - 1)
+        blocks = [frame[[key] + rest[i:i + step]] for i in range(0, len(rest), step)]
+
+    shown = []
+    for block in blocks:
+        display = block.copy()
+        for column in display.columns:
+            display[column] = display[column].map(lambda v: shorten(v, 20))
+        shown.append(display)
+
+    block_height = 0.38 + 0.30 * len(frame)
+    figure, axes = plt.subplots(len(shown), 1,
+                                figsize=(width, 0.55 + block_height * len(shown)),
+                                squeeze=False)
+    for axis, display in zip(axes[:, 0], shown):
+        _draw_table(axis, display, fontsize)
+
     heading = title if not subtitle else f"{title}\n{subtitle}"
-    axis.set_title(heading, loc="left", pad=14, fontsize=13)
+    axes[0, 0].set_title(heading, loc="left", pad=14, fontsize=13)
     save(figure, filename)
