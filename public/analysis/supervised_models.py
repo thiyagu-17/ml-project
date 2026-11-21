@@ -111,15 +111,59 @@ def plot_confusion(axis, matrix, title, accuracy) -> None:
 # --------------------------------------------------------------------------
 
 
+def labelled_rows(features: pd.DataFrame, target: pd.Series, rows: int = 6,
+                  first: str = "LABEL", decimals: int = 3) -> pd.DataFrame:
+    """The first rows of a feature table with the label placed in front."""
+    sample = features.head(rows).copy().round(decimals)
+    # Counts and yes/no columns are whole numbers; show them without ".0".
+    for column in sample.columns:
+        if np.all(np.mod(features[column].to_numpy(dtype=float), 1) == 0):
+            sample[column] = sample[column].astype(int)
+    sample.columns = [SHORT[c] for c in features.columns]
+    sample.insert(0, first, target.head(rows).map({1: "Defended", 0: "Chased"}).values)
+    return sample
+
+
 def figure_labelled_sample(features: pd.DataFrame, target: pd.Series) -> None:
-    sample = features.head(6).copy().round(3)
-    sample.insert(0, "LABEL", target.head(6).map({1: "Defended", 0: "Chased"}).values)
-    sample.columns = ["LABEL"] + [SHORT[c] for c in features.columns]
     ps.table_figure(
-        sample, "supervised-data-sample.png",
+        labelled_rows(features, target), "supervised-data-sample.png",
         "Labelled data: every row carries the answer the model must learn",
         f"{len(features):,} matches x {len(ALL_FEATURES)} features, plus one label column",
-        max_columns=9, width=13.5,
+        width=13.5, wrap_columns=8, fontsize=9.5,
+    )
+
+
+def figure_split_samples(X_train, X_test, y_train, y_test, match_ids: pd.Series) -> None:
+    """Small table images of the actual training and testing sets."""
+    for name, X, y, filename in [
+        ("Training set", X_train, y_train, "train-set-sample.png"),
+        ("Testing set", X_test, y_test, "test-set-sample.png"),
+    ]:
+        sample = labelled_rows(X, y)
+        sample.insert(1, "Match ID", match_ids.loc[X.index[:6]].astype(str).values)
+        ps.table_figure(
+            sample, filename,
+            f"{name}: first 6 of {len(X):,} rows",
+            "Match IDs never repeat between the two sets",
+            width=13.5, wrap_columns=9, fontsize=9.5,
+        )
+
+
+def figure_model_inputs(train_multinomial, train_bernoulli, y_train, columns) -> None:
+    """Show the training rows in the exact form each Naive Bayes model receives."""
+    scaled = pd.DataFrame(train_multinomial[:6], columns=columns)
+    ps.table_figure(
+        labelled_rows(scaled, y_train), "nb-multinomial-input.png",
+        "Multinomial NB input: every column rescaled onto 0 to 1",
+        "Limits learned from the training set only, so every value is non-negative",
+        width=13.5, wrap_columns=8, fontsize=9.5,
+    )
+    binary = pd.DataFrame(np.asarray(train_bernoulli)[:6], columns=columns)
+    ps.table_figure(
+        labelled_rows(binary, y_train), "nb-bernoulli-input.png",
+        "Bernoulli NB input: every column reduced to 0 or 1",
+        "1 = above the training-set median; the three yes/no columns are used as they are",
+        width=13.5, wrap_columns=8, fontsize=9.5,
     )
 
 
@@ -197,11 +241,16 @@ def run_naive_bayes(X_train, X_test, y_train, y_test) -> dict:
     train_multinomial = scaler.transform(X_train)
     test_multinomial = np.clip(scaler.transform(X_test), 0, 1)
 
-    # BernoulliNB expects on/off features, so each column is split at its
-    # training-set median into "above typical" and "at or below typical".
+    # BernoulliNB expects on/off features, so each measured column is split at
+    # its training-set median into "above typical" and "at or below typical".
+    # The yes/no context columns are already 0/1 and are used unchanged:
+    # splitting them at a median of 1 would turn them into a constant zero.
+    binary_columns = [c for c in X_train.columns if set(X_train[c].unique()) <= {0, 1}]
     thresholds = X_train.median()
+    thresholds[binary_columns] = 0.5
     train_bernoulli = (X_train > thresholds).astype(int)
     test_bernoulli = (X_test > thresholds).astype(int)
+    figure_model_inputs(train_multinomial, train_bernoulli, y_train, X_train.columns)
 
     models = {
         "Multinomial NB": (MultinomialNB(), train_multinomial, test_multinomial),
@@ -390,15 +439,17 @@ def run_decision_trees(X_train, X_test, y_train, y_test) -> dict:
         # Size the canvas from the leaf count rather than the depth limit, so a
         # wide tree gets the horizontal room its deepest row actually needs and
         # the node boxes never overlap.
+        # 1.6 inches per leaf is enough for sklearn's node boxes at this font
+        # size to sit side by side on the bottom row without overlapping.
         leaves = results[name]["leaves"]
-        width = max(14.0, 0.95 * leaves)
-        height = 2.1 * results[name]["depth"] + 2.0
+        width = max(14.0, 1.6 * leaves)
+        height = (2.1 if leaves <= 20 else 2.6) * results[name]["depth"] + 2.0
         figure, axis = ps.plt.subplots(figsize=(width, height))
         axis.set_facecolor(ps.PAGE_BG)
         plot_tree(
             model, ax=axis, feature_names=feature_labels, class_names=CLASS_NAMES,
             filled=True, rounded=True, impurity=True, proportion=True,
-            fontsize=9 if leaves <= 20 else 8,
+            fontsize=9 if leaves <= 20 else 10,
         )
         axis.set_title(
             f"{name}  -  test accuracy {accuracy:.1%}, {results[name]['leaves']} leaves",
@@ -472,14 +523,21 @@ def main() -> None:
     print(f"  train {X_train.shape}  test {X_test.shape}  overlapping rows: {overlap}",
           flush=True)
 
+    # The match ID is exported alongside the features (never used as a feature)
+    # so anyone can confirm that no match appears in both files.
+    match_ids = clean["match_id"]
+    assert not set(match_ids.loc[X_train.index]) & set(match_ids.loc[X_test.index])
     train_export = X_train.copy()
+    train_export.insert(0, "match_id", match_ids.loc[X_train.index].values)
     train_export["LABEL"] = y_train.map({1: "Defended", 0: "Chased"})
     train_export.to_csv(DATA_DIR / "supervised-train.csv", index=False)
     test_export = X_test.copy()
+    test_export.insert(0, "match_id", match_ids.loc[X_test.index].values)
     test_export["LABEL"] = y_test.map({1: "Defended", 0: "Chased"})
     test_export.to_csv(DATA_DIR / "supervised-test.csv", index=False)
 
     figure_labelled_sample(features, target)
+    figure_split_samples(X_train, X_test, y_train, y_test, match_ids)
     figure_train_test(y_train, y_test)
     figure_class_separation(features, target)
 

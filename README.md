@@ -19,17 +19,25 @@ npm run preview # serve the production build
 
 ## Reproduce the analysis
 
-Install the Python packages in `requirements.txt`, then run the four scripts in
+Install the Python packages in `requirements.txt`, then run the five scripts in
 order from the project root:
 
 ```sh
 python public/analysis/build_dataset.py      # gather + clean  (slow: downloads ~29 MB)
 python public/analysis/eda_cricket.py        # 15 exploratory figures
+python public/analysis/concept_figures.py    # explanatory diagrams for the Overview sections
 python public/analysis/clustering_pca.py     # clustering, PCA, SVD
 python public/analysis/supervised_models.py  # Naive Bayes, Decision Trees
 ```
 
-`build_dataset.py` accepts `--skip-weather` to skip the Open-Meteo enrichment.
+`build_dataset.py` options:
+
+- `--from-raw` re-cleans the committed `cricsheet-matches-raw.csv` instead of
+  downloading. Cricsheet keeps adding matches, so a fresh download produces a
+  larger raw file than the one published with the site.
+- `--skip-weather` keeps the committed `venue-weather.csv` instead of calling
+  Open-Meteo. Without it, only cities and dates missing from that file are
+  requested.
 
 ### Data sources
 
@@ -61,14 +69,20 @@ src/App.css          styling (unchanged by the analysis pipeline)
 ### Scripts
 
 - `build_dataset.py` — downloads the archives, flattens 6,872 matches from
-  ball-by-ball data, calls both APIs, applies eleven documented cleaning rules,
-  and writes the raw and cleaned CSVs.
+  ball-by-ball data, applies eleven documented cleaning rules, calls CricAPI
+  (raw snapshot plus a cleaned ODI/T20 version) and Open-Meteo (match-day
+  weather for every host city with 38+ matches), and writes all the CSVs.
 - `eda_cricket.py` — the raw/clean comparison tables and 15 exploratory figures.
+- `concept_figures.py` — small synthetic diagrams that explain k-means,
+  hierarchical clustering, distance measures, eigenvectors, dimensionality and
+  impurity. They use made-up data on purpose; the cricket results come from the
+  other scripts.
 - `clustering_pca.py` — k-means and average-linkage hierarchical clustering on
-  cosine distance, plus PCA and SVD. All features are standardised first.
+  cosine distance, plus PCA and SVD. All features are standardised first;
+  silhouettes are scored on every match, not a subsample.
 - `supervised_models.py` — Multinomial, Bernoulli and Gaussian Naive Bayes plus
   three Decision Trees, on a disjoint stratified 70/30 split.
-- `plot_style.py` — shared figure styling used by all three figure scripts.
+- `plot_style.py` — shared figure styling used by every figure script.
 
 ### Generated outputs consumed by the website
 
@@ -76,8 +90,9 @@ src/App.css          styling (unchanged by the analysis pipeline)
 - `public/analysis/clustering-pca-results.json`
 - `public/analysis/supervised-results.json`
 
-Every number shown on the site is read from these files at runtime rather than
-typed into the page, so re-running the pipeline updates the site.
+The numbers in the page text and figure captions are read from these files at
+runtime rather than typed into the page, so re-running the pipeline updates the
+site.
 
 ## Headline results
 
