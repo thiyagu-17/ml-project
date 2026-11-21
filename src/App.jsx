@@ -161,6 +161,7 @@ function App() {
   const [eda, setEda] = useState(null)
   const [unsupervised, setUnsupervised] = useState(null)
   const [supervised, setSupervised] = useState(null)
+  const [part4, setPart4] = useState(null)
   const [reportError, setReportError] = useState('')
 
   useEffect(() => {
@@ -175,12 +176,14 @@ function App() {
       load('eda-summary.json'),
       load('clustering-pca-results.json'),
       load('supervised-results.json'),
+      load('regression-adaboost-results.json'),
     ])
-      .then(([edaData, unsupervisedData, supervisedData]) => {
+      .then(([edaData, unsupervisedData, supervisedData, part4Data]) => {
         if (cancelled) return
         setEda(edaData)
         setUnsupervised(unsupervisedData)
         setSupervised(supervisedData)
+        setPart4(part4Data)
       })
       .catch(() => {
         if (!cancelled) setReportError('The computed results could not be loaded.')
@@ -1317,7 +1320,8 @@ function App() {
             grown deep enough can memorise its training data perfectly, reaching
             {depthStudy ? ` ${percent(depthStudy.deep_train_accuracy)} ` : ' '}
             training accuracy while performing far worse on unseen matches. Figure 12 in the Results shows
-            precisely that gap opening, and it is only visible because the test rows were held back.
+            precisely that gap opening, and it is only visible because every depth is scored on
+            rows that were held out of its own fitting.
           </p>
           <div className="raw-clean-grid">
             <Figure
@@ -1423,7 +1427,7 @@ function App() {
                 <Figure
                   name="dt-depth-curve.png"
                   alt="Line chart of training and testing accuracy against maximum tree depth"
-                  caption="Figure 12: Training and testing accuracy as the depth limit is raised from 1 to 20. The training line climbs toward perfection while the testing line peaks early and then declines, which is overfitting made visible."
+                  caption="Figure 12: Training accuracy and 5-fold cross-validated accuracy as the depth limit is raised from 1 to 20, using the training set only. The training line climbs toward perfection while the cross-validated line peaks early and then declines, which is overfitting made visible."
                 />
               </div>
               <p>
@@ -1435,11 +1439,17 @@ function App() {
                 scoring lowest on its own training data, and the gap between its training and
                 testing accuracy is only{' '}
                 {((bestTree.train_accuracy - bestTree.accuracy) * 100).toFixed(1)}{' '}
-                points. Figure 12 extends this across every depth from 1 to 20: training accuracy
-                rises toward {depthStudy ? percent(depthStudy.deep_train_accuracy) : ''} while
-                testing accuracy peaks at depth {depthStudy ? depthStudy.best_depth : ''} and then
-                falls to {depthStudy ? percent(depthStudy.deep_test_accuracy) : ''}. The deepest
-                trees are memorising individual matches.
+                points. Figure 12 extends this across every depth from 1 to 20, using 5-fold
+                cross-validation inside the training set so that the test set plays no part in
+                choosing a depth. Training accuracy rises toward{' '}
+                {depthStudy ? percent(depthStudy.deep_train_accuracy) : ''} while cross-validated
+                accuracy peaks at depth {depthStudy ? depthStudy.best_depth : ''}
+                {depthStudy?.best_depth === trees['Tree A - Gini, depth 3']?.depth
+                  ? ', the same depth as Tree A,'
+                  : ''}{' '}
+                and then falls to{' '}
+                {depthStudy ? percent(depthStudy.deep_cv_accuracy) : ''}. The deepest trees are
+                memorising individual matches.
               </p>
               <p>
                 All three trees place <em>first-innings run rate</em> at the root, and all three
@@ -1478,6 +1488,628 @@ function App() {
             remaining three matches in ten that the tree gets wrong are not waiting for a more
             complicated model; they are the part of cricket that the first innings genuinely does
             not determine.
+          </p>
+        </section>
+      </section>
+    )
+  }
+
+  // ------------------------------------------------------------- regression
+
+  const renderRegression = () => {
+    const results = part4
+    const linear = results?.linear
+    const logistic = results?.logistic
+    const nb = supervised?.naive_bayes
+    const recallOf = (matrix, row) => matrix[row][row] / (matrix[row][0] + matrix[row][1])
+    return (
+      <section className="content-panel assignment-panel">
+        <header className="assignment-heading">
+          <span className="eyebrow">Supervised learning</span>
+          <h2>Regression</h2>
+          <p>Predicting a number with a straight line, and a yes-or-no outcome with an S-curve.</p>
+        </header>
+
+        <section className="assignment-section">
+          <h3>Overview</h3>
+          <p>
+            <strong>Linear regression</strong> predicts a number. It assumes the target can be
+            written as a starting value, the intercept, plus a weighted sum of the inputs, and it
+            chooses the weights that make the squared gaps between predicted and actual values as
+            small as possible across the training data. Those gaps are called residuals, and
+            minimising their squared total is known as ordinary least squares. Each fitted weight,
+            or coefficient, has a direct reading: it is how much the prediction changes when that
+            one input rises by a single unit while every other input is held fixed. Here linear
+            regression is used to predict how many runs a first innings will finish with, using
+            only what was known when the powerplay ended.
+          </p>
+          <p>
+            <strong>Logistic regression</strong> predicts which of two classes an observation
+            belongs to, together with how likely each class is. It starts from exactly the same
+            kind of weighted sum, called the linear score <em>z</em>, but a score can be any number
+            from minus infinity to plus infinity, which cannot be a probability. The{' '}
+            <strong>sigmoid</strong> function, p = 1 / (1 + e<sup>−z</sup>), solves this by
+            squeezing every score into the range 0 to 1: a score of 0 becomes a probability of 0.5,
+            large positive scores approach 1 and large negative scores approach 0. The probability
+            becomes a class by comparing it with a threshold, normally 0.5, which is the same as
+            asking whether the score is above or below zero. Because the weights act on the score,
+            each coefficient changes the <em>log-odds</em> of the outcome, and raising e to the
+            power of a coefficient gives the factor by which the odds are multiplied.
+          </p>
+          <p>
+            The two methods differ in what they predict and in how they are judged. Linear
+            regression outputs an unbounded number and is fitted by minimising squared error, so it
+            is scored by how far its predictions miss, using error measures such as RMSE and MAE and
+            the share of variation it explains, R squared. Logistic regression outputs a
+            probability and is fitted by maximising the likelihood of the observed classes, so it is
+            scored like any classifier, with a confusion matrix and accuracy. Using a straight line
+            for a yes-or-no target fails visibly, because the line runs below 0 and above 1, as the
+            right-hand panel of Figure 2 shows. Here logistic regression answers the same question as
+            Naive Bayes and the decision trees: at the innings break, will the total be defended or
+            chased down?
+          </p>
+          <div className="analysis-figure-grid">
+            <Figure
+              name="concept-linear-regression.png"
+              alt="Scatter of points with a fitted straight line and vertical residual segments"
+              caption="Figure 1: Linear regression on a small made-up example, with the orange segments showing each residual. The fitted line is the one that makes the total of the squared residuals as small as possible, and its slope is the change in the target for each extra unit of input."
+              wide
+            />
+            <Figure
+              name="concept-sigmoid.png"
+              alt="Sigmoid curve mapping a linear score to a probability, beside linear and logistic fits on yes/no data"
+              caption="Figure 2: Left, the sigmoid turns any linear score into a probability, and the 0.5 threshold turns that probability into a class. Right, on a yes/no target a straight line runs outside 0 and 1, while the logistic curve always stays a valid probability."
+              wide
+            />
+          </div>
+        </section>
+
+        <section className="assignment-section">
+          <h3>Data Prep</h3>
+          <p>
+            Both models are supervised, so every row needs a <strong>label</strong>, the answer the
+            model learns from, and the two models need different kinds of label. Linear regression
+            needs a <strong>numeric target</strong>: the first-innings total in runs. Its inputs are
+            the powerplay runs and powerplay wickets, plus whether the match was a twenty-over game,
+            whether it was a women&apos;s match, and whether the toss winner chose to bat. Two
+            further columns multiply the powerplay figures by the twenty-over indicator, which lets
+            a powerplay run or wicket count differently in each format. Everything that happens
+            after the powerplay is deliberately left out, because the run rate and overs of the full
+            innings would give the total away.
+          </p>
+          <p>
+            Logistic regression needs a <strong>two-class label</strong>, so it uses the same{' '}
+            <em>Defended</em> or <em>Chased</em> label and the same fourteen first-innings
+            measurements as Naive Bayes and the decision trees. Its inputs are standardised to zero
+            mean and unit spread inside the model pipeline, using averages learned from the training
+            rows only. That matters because the model is regularised, meaning large coefficients are
+            penalised, and the penalty is only fair if every input is on the same scale.
+          </p>
+          <p>
+            Both models reuse the <strong>same disjoint 70/30 split</strong> as Part 3, matched by
+            match ID, so every model on this site is scored on the same{' '}
+            {results ? results.test_rows.toLocaleString() : ''} test matches. The training set
+            {results ? ` (${results.train_rows.toLocaleString()} matches)` : ''} builds the model and
+            the testing set measures it. The two must be disjoint because a model can memorise the
+            rows it has seen, so a score measured on training rows reports memory rather than the
+            ability to predict a new match; the files share {results ? results.overlapping_rows : 0}{' '}
+            match IDs. The test set was also kept out of every decision: the linear model&apos;s
+            inputs and the logistic model&apos;s regularisation strength were both chosen by 5-fold
+            cross-validation inside the training set, and each final model was scored on the test
+            set exactly once.
+          </p>
+          <div className="raw-clean-grid">
+            <Figure
+              name="regression-data-sample.png"
+              alt="Table image of the linear regression data with the total as the target"
+              caption="Figure 3: The linear regression data, with the first-innings total as the numeric target. Every input column is known by the end of the powerplay, so the model is genuinely predicting ahead."
+              wide
+            />
+            <Figure
+              name="regression-train-sample.png"
+              alt="Table image of the first rows of the linear regression training set"
+              caption="Figure 4: The first rows of the linear regression training set. These are the same matches as the classification training set, with different columns."
+              wide
+            />
+            <Figure
+              name="regression-test-sample.png"
+              alt="Table image of the first rows of the linear regression testing set"
+              caption="Figure 5: The first rows of the linear regression testing set. None of these match IDs appears in the training set."
+              wide
+            />
+            <Figure
+              name="train-set-sample.png"
+              alt="Table image of the first rows of the classification training set"
+              caption="Figure 6: The first rows of the training set used by logistic regression, with the Defended or Chased label in front. It is the same file used by Naive Bayes and the decision trees."
+              wide
+            />
+            <Figure
+              name="test-set-sample.png"
+              alt="Table image of the first rows of the classification testing set"
+              caption="Figure 7: The first rows of the testing set used by logistic regression. Keeping one shared test set is what makes the comparison with Naive Bayes fair."
+              wide
+            />
+          </div>
+          <DataLinks items={[
+            { href: dataUrl('regression-train.csv'), label: 'Linear regression training set (CSV)', download: true },
+            { href: dataUrl('regression-test.csv'), label: 'Linear regression testing set (CSV)', download: true },
+            { href: dataUrl('supervised-train.csv'), label: 'Logistic regression training set (CSV)', download: true },
+            { href: dataUrl('supervised-test.csv'), label: 'Logistic regression testing set (CSV)', download: true },
+            { href: dataUrl('cricsheet-matches-clean.csv'), label: 'Cleaned source data (CSV)', download: true },
+            { href: dataUrl('cricsheet-matches-raw.csv'), label: 'Raw source data (CSV)', download: true },
+            { href: 'https://cricsheet.org/downloads/', label: 'Original raw archives' },
+          ]} />
+        </section>
+
+        <section className="assignment-section">
+          <h3>Code</h3>
+          <p>
+            Written in Python with <em>scikit-learn</em>: <em>LinearRegression</em> for the total,
+            and <em>LogisticRegression</em> inside a pipeline with <em>StandardScaler</em> for the
+            result, tuned with <em>GridSearchCV</em>. Cross-validation uses <em>KFold</em> and{' '}
+            <em>StratifiedKFold</em>, and <em>pandas</em> and <em>Matplotlib</em> handle the data and
+            figures.
+          </p>
+          <CodeLinks items={[
+            { file: 'regression_adaboost.py', label: 'regression_adaboost.py — linear and logistic regression, AdaBoost' },
+            { file: 'concept_figures.py', label: 'concept_figures.py — overview diagrams' },
+            { file: 'supervised_models.py', label: 'supervised_models.py — the shared train/test split' },
+            { file: 'build_dataset.py', label: 'build_dataset.py — upstream data pipeline' },
+          ]} />
+        </section>
+
+        <section className="assignment-section">
+          <h3>Results</h3>
+          {linear && logistic && nb ? (
+            <>
+              <h4>Linear regression: predicting the total from the powerplay</h4>
+              <p>
+                Three sets of inputs were compared by 5-fold cross-validation on the training set.
+                The powerplay alone gave a cross-validated RMSE of{' '}
+                {linear.candidates[0].cv_rmse.toFixed(1)} runs, adding format, gender and toss
+                brought it down to {linear.candidates[1].cv_rmse.toFixed(1)}, and letting each
+                format have its own powerplay slopes brought it to{' '}
+                {linear.candidates[2].cv_rmse.toFixed(1)}. The model with the lowest error, &ldquo;
+                {linear.chosen}&rdquo;, was then fitted on all training rows and scored once on the
+                test set.
+              </p>
+              <Figure
+                name="regression-feature-selection.png"
+                alt="Bar chart of cross-validated RMSE for three candidate input sets"
+                caption="Figure 8: Cross-validated error for the three candidate input sets, computed on the training set only. Knowing the format matters far more than anything else, and separate slopes per format help a little further."
+              />
+              <div className="metric-strip">
+                <div><span>Test RMSE</span><strong>{linear.test_rmse.toFixed(1)} runs</strong></div>
+                <div><span>Test MAE</span><strong>{linear.test_mae.toFixed(1)} runs</strong></div>
+                <div><span>Test R squared</span><strong>{linear.test_r2.toFixed(2)}</strong></div>
+              </div>
+              <p>
+                On the test set the model explains{' '}
+                {percent(linear.test_r2, 0)} of the variation in first-innings totals (R squared{' '}
+                {linear.test_r2.toFixed(2)}), and its predictions miss by{' '}
+                {linear.test_mae.toFixed(0)} runs on average (MAE), with an RMSE of{' '}
+                {linear.test_rmse.toFixed(0)} runs. For comparison, simply predicting each
+                format&apos;s average total would miss by {linear.baseline_mae.toFixed(0)} runs on
+                average, so the powerplay information cuts the typical error by about{' '}
+                {(linear.baseline_mae - linear.test_mae).toFixed(0)} runs. Much of the R squared
+                comes from separating the two formats; within a single format the model explains{' '}
+                {percent(linear.test_r2_odi, 0)} of the variation in fifty-over totals and{' '}
+                {percent(linear.test_r2_t20, 0)} in twenty-over totals. Errors are larger in the
+                fifty-over game, {linear.test_mae_odi.toFixed(0)} runs against{' '}
+                {linear.test_mae_t20.toFixed(0)}, because forty overs remain after its powerplay
+                compared with fourteen in a twenty-over match.
+              </p>
+              <div className="analysis-figure-grid">
+                <Figure
+                  name="regression-predicted-actual.png"
+                  alt="Scatter plot of predicted against actual first-innings totals coloured by format"
+                  caption="Figure 9: Predicted against actual totals for every test match, with the dashed line marking a perfect prediction. The points follow the line in both formats, but the fifty-over cloud is wider because more of that innings remains after the powerplay."
+                />
+                <Figure
+                  name="regression-residuals.png"
+                  alt="Histograms of prediction errors by format"
+                  caption="Figure 10: The prediction errors on the test set, split by format. Both are centred on zero, so the model is not systematically too high or too low, and the fifty-over errors are spread more widely."
+                />
+              </div>
+              <p>
+                Two coefficients carry the cricketing story. The <strong>powerplay runs</strong>{' '}
+                coefficient is {linear.slopes.odi_run.toFixed(2)} in the fifty-over game and{' '}
+                {linear.slopes.t20_run.toFixed(2)} in the twenty-over game: with everything else
+                held equal, each extra run scored in the powerplay adds about two runs to the final
+                total: the run itself, plus roughly one more later, because a fast start is usually
+                extended rather than merely banked.
+                The <strong>powerplay wickets</strong> coefficient is{' '}
+                {linear.slopes.odi_wicket.toFixed(1)} in the fifty-over game and{' '}
+                {linear.slopes.t20_wicket.toFixed(1)} in the twenty-over game: each wicket lost in
+                the first ten overs of a fifty-over innings costs roughly{' '}
+                {Math.abs(linear.slopes.odi_wicket).toFixed(0)} runs by the end, while an early
+                wicket in a twenty-over innings costs only about{' '}
+                {Math.abs(linear.slopes.t20_wicket).toFixed(0)}, since there is little time left for
+                it to matter and every batter is expected to attack anyway.
+              </p>
+
+              <h4>Logistic regression: defended or chased?</h4>
+              <p>
+                The regularisation strength C was chosen from {logistic.c_grid.length} values
+                between {logistic.c_grid[0]} and {logistic.c_grid[logistic.c_grid.length - 1]} by
+                5-fold cross-validation on the training set. Smaller values of C penalise large
+                coefficients more heavily. The best was C = {logistic.best_c}, with a
+                cross-validated accuracy of {percent(logistic.best_cv_accuracy)}; the model was then
+                refitted on all training rows with that setting and scored once on the test set.
+              </p>
+              <Figure
+                name="logistic-tuning.png"
+                alt="Line chart of cross-validated accuracy against the regularisation strength C"
+                caption="Figure 11: Cross-validated accuracy for each value of C, using the training set only. Accuracy is almost flat across a wide range, so the result does not hinge on this setting."
+              />
+              <div className="metric-strip">
+                <div><span>Test accuracy</span><strong>{percent(logistic.accuracy)}</strong></div>
+                <div><span>Area under ROC curve</span><strong>{logistic.roc_auc.toFixed(3)}</strong></div>
+                <div><span>Cross-validated accuracy</span><strong>{percent(logistic.best_cv_accuracy)}</strong></div>
+              </div>
+              <div className="analysis-figure-grid">
+                <Figure
+                  name="logistic-confusion-matrix.png"
+                  alt="Confusion matrix for logistic regression on the testing set"
+                  caption={`Figure 12: The logistic regression confusion matrix on the test set. It identifies ${percent(recallOf(logistic.confusion_matrix, 0), 0)} of the totals that were chased down and ${percent(recallOf(logistic.confusion_matrix, 1), 0)} of those that were defended.`}
+                />
+                <Figure
+                  name="logistic-odds-ratios.png"
+                  alt="Bar chart of odds multipliers for each input"
+                  caption="Figure 13: How a one-standard-deviation increase in each input multiplies the odds of the total being defended, holding the others fixed. Bars to the right make defending more likely and bars to the left make it less likely."
+                />
+              </div>
+              <p>
+                The model was right on {percent(logistic.accuracy)} of the test matches, against{' '}
+                {percent(results.majority_class_baseline)} for always guessing the more common
+                outcome. To read a coefficient, recall that the <em>odds</em> of defending are the
+                probability of defending divided by the probability of not defending, so even odds
+                of 1 mean a 50 percent chance. The <strong>run rate</strong> coefficient means that,
+                with the total and every other input held fixed, each extra run per over multiplies
+                the odds of the total being defended by about{' '}
+                <strong>{logistic.odds_per_run_rate.toFixed(2)}</strong>. Starting from even odds,
+                that is a move from a 50 percent chance to roughly{' '}
+                {percent(logistic.odds_per_run_rate / (1 + logistic.odds_per_run_rate), 0)}. Raw
+                runs work the same way: each extra ten runs multiplies the odds by{' '}
+                {logistic.odds_per_10_runs.toFixed(2)}. Some smaller bars point the opposite way to
+                intuition, such as boundary share, because run rate, runs, boundaries and dot balls
+                overlap heavily; once run rate and runs are fixed, those columns only adjust the
+                details, so their individual coefficients should not be read on their own.
+              </p>
+
+              <h4>Comparison with Naive Bayes</h4>
+              <p>
+                On the same test matches, logistic regression reached{' '}
+                {percent(logistic.accuracy)} against {percent(nb['Multinomial NB'].accuracy)} for the
+                multinomial Naive Bayes model from Part 3, a gain of{' '}
+                {((logistic.accuracy - nb['Multinomial NB'].accuracy) * 100).toFixed(1)} points, and{' '}
+                {((logistic.accuracy - nb['Gaussian NB'].accuracy) * 100).toFixed(1)} points over the
+                best Naive Bayes variant, Gaussian. Its area under the ROC curve also rises, from{' '}
+                {nb['Multinomial NB'].roc_auc.toFixed(3)} to {logistic.roc_auc.toFixed(3)}. The
+                likely reason is the independence assumption. Naive Bayes treats run rate, boundary
+                share and dot-ball share as separate pieces of evidence and so counts the same
+                information several times over, while logistic regression fits all the weights
+                together and shares the credit among correlated inputs. Logistic regression is now
+                the most accurate classifier on the site, narrowly ahead of AdaBoost.
+              </p>
+              <div className="analysis-figure-grid">
+                <Figure
+                  name="logistic-vs-naive-bayes.png"
+                  alt="Bar chart comparing logistic regression with three Naive Bayes models"
+                  caption="Figure 14: Logistic regression against the three Naive Bayes variants from Part 3, all scored on the same test matches. The dashed line is the accuracy of always guessing the more common outcome."
+                />
+                <Figure
+                  name="model-comparison.png"
+                  alt="Bar chart of test accuracy for every classifier on the site"
+                  caption="Figure 15: Every classifier built so far, scored on the same untouched test set. The two Part 4 models finish first and second, though the whole field sits within five points."
+                />
+              </div>
+            </>
+          ) : pending('the regression results')}
+        </section>
+
+        <section className="assignment-section">
+          <h3>Conclusions</h3>
+          <p>
+            A good powerplay is worth roughly twice its value by the end of an innings. Every run
+            scored in the opening overs tends to be followed by about another run later, which
+            suggests that a fast start changes how the rest of the innings is played rather than
+            simply putting runs in the bank. Early wickets matter far more in the fifty-over game,
+            where a side that loses its openers cheaply has forty overs in which to feel the
+            consequences, than in the twenty-over game, where there is little time left for caution
+            to cost anything. At the same time, the powerplay explains only about two fifths of the
+            variation in fifty-over totals and about half in twenty-over totals. The rest of the
+            innings, with its partnerships, collapses and late acceleration, still decides much of
+            the score.
+          </p>
+          <p>
+            At the innings break, the outcome can be called correctly about three times in four, the
+            best result on this site so far. The model behind that figure is simple enough to be
+            explained in a sentence: a faster and larger total makes a defence more likely, and the
+            pace of scoring adds information that the raw total does not. Because it gives a
+            probability rather than a bare yes or no, it can also say how confident it is, which is
+            what a live win-probability graphic on a broadcast needs. Roughly one match in four still
+            goes against the prediction, and that remaining uncertainty belongs to the chase itself,
+            which no amount of first-innings evidence can see in advance.
+          </p>
+        </section>
+      </section>
+    )
+  }
+
+  // --------------------------------------------------------------- adaboost
+
+  const renderAdaBoost = () => {
+    const results = part4
+    const boost = results?.adaboost
+    const trees = supervised?.decision_trees
+    const treeA = trees?.['Tree A - Gini, depth 3']
+    const recallOf = (matrix, row) => matrix[row][row] / (matrix[row][0] + matrix[row][1])
+    return (
+      <section className="content-panel assignment-panel">
+        <header className="assignment-heading">
+          <span className="eyebrow">Supervised learning</span>
+          <h2>AdaBoost</h2>
+          <p>Hundreds of one-question trees, each one focused on the matches the others got wrong.</p>
+        </header>
+
+        <section className="assignment-section">
+          <h3>Overview</h3>
+          <p>
+            <strong>Boosting</strong> builds one strong model out of many weak ones, trained one
+            after another, with each new model concentrating on the cases its predecessors got wrong.
+            It is easiest to understand next to <strong>bagging</strong>, the other main way of
+            combining trees. Bagging, the idea behind random forests, trains many full trees
+            independently on random resamples of the data and lets them vote equally; because the
+            trees do not depend on each other they can be built in parallel, and averaging them mainly
+            reduces the variance of a single unstable tree. Boosting instead builds its models in
+            sequence, and each one is shaped by the mistakes of the ones before it, which mainly
+            reduces bias, the systematic errors a simple model makes.
+          </p>
+          <p>
+            AdaBoost, short for adaptive boosting, usually works with <strong>decision stumps</strong>:
+            trees with a single split, which ask one question such as &ldquo;was the run rate above
+            five?&rdquo; and give an answer on each side. A stump on its own is a weak learner, only
+            somewhat better than guessing. Training starts by giving every row the same weight. Each
+            round fits a stump to the weighted data and measures its <strong>weighted error</strong>,
+            the total weight of the rows it misclassifies. The rows it got wrong then have their weight
+            increased and the rows it got right have their weight decreased, so the next stump is
+            forced to pay attention to the hard cases.
+          </p>
+          <p>
+            Each stump also receives a say in the final decision, its weight{' '}
+            <strong>alpha</strong>, computed as one half of the natural log of (1 − error) / error. A
+            stump with low error earns a large alpha, a stump that is no better than a coin flip, with
+            error 0.5, earns an alpha of zero, and the same alpha sets how sharply the row weights
+            change after that round. To classify a new match, every stump votes for a class and the
+            votes are added up weighted by alpha, so accurate stumps count for more; the sign of the
+            total decides the prediction. The <strong>learning rate</strong> scales every alpha down,
+            so that each round changes the model less, which usually needs more rounds but can
+            generalise better. Here AdaBoost answers the same Defended or Chased question as the other
+            classifiers on this site.
+          </p>
+          <div className="analysis-figure-grid">
+            <Figure
+              name="concept-bagging-boosting.png"
+              alt="Diagram contrasting parallel bagging with sequential boosting"
+              caption="Figure 1: Bagging builds independent full trees on random samples and gives them an equal vote. Boosting builds stumps one after another on reweighted data and weights each vote by that stump's alpha."
+              wide
+            />
+            <Figure
+              name="concept-adaboost-rounds.png"
+              alt="Four panels showing AdaBoost reweighting points over three rounds and the final combined boundary"
+              caption="Figure 2: AdaBoost on a small made-up example, with point size showing each row's current weight. Rows a stump gets wrong are ringed and grow before the next round, and the final panel shows the weighted vote of 25 stumps forming a boundary no single stump could draw."
+              wide
+            />
+            <Figure
+              name="concept-adaboost-alpha.png"
+              alt="Curve of alpha against a stump's weighted error"
+              caption="Figure 3: A stump's alpha falls as its weighted error rises and reaches zero at an error of 0.5. A stump that does worse than chance would get a negative alpha, which amounts to flipping its vote."
+            />
+          </div>
+        </section>
+
+        <section className="assignment-section">
+          <h3>Data Prep</h3>
+          <p>
+            AdaBoost is supervised, so it needs <strong>labelled</strong> data: every row carries the{' '}
+            <em>Defended</em> or <em>Chased</em> answer it is learning to predict, and no
+            second-innings information is used. It reuses the <strong>same disjoint 70/30 split</strong>{' '}
+            as every other classifier, matched by match ID, with{' '}
+            {boost ? `${results.train_rows.toLocaleString()} training and ${results.test_rows.toLocaleString()} testing matches` : 'the same training and testing matches'}.
+            The sets must be disjoint because boosting can keep adding stumps until it fits its
+            training rows very closely, so only matches it never saw can show whether it learned
+            the game or the particular rows.
+          </p>
+          <p>
+            scikit-learn&apos;s AdaBoost needs every input to be numeric. Eleven columns already are,
+            but three are text in the cleaned data: the format (<em>ODI</em> or <em>T20</em>), the
+            gender, and the toss decision (<em>bat</em> or <em>field</em>). These were converted with{' '}
+            <strong>one-hot encoding</strong> using <em>pandas.get_dummies</em>, which replaces each
+            text column with one 0/1 column per category, so a fifty-over match becomes 1 in{' '}
+            <em>match_type_ODI</em> and 0 in <em>match_type_T20</em>. That gives{' '}
+            {boost ? boost.n_features : 17} numeric inputs. No scaling was needed, because a stump
+            only compares one column against a threshold. To choose settings without touching the
+            test set, the training set was split once more into{' '}
+            {boost ? boost.fit_rows.toLocaleString() : ''} rows for fitting and{' '}
+            {boost ? boost.validation_rows.toLocaleString() : ''} rows for validation.
+          </p>
+          <div className="raw-clean-grid">
+            <Figure
+              name="adaboost-onehot-before.png"
+              alt="Table image of three text columns before one-hot encoding"
+              caption="Figure 4: The three categorical columns as they appear in the cleaned data. A stump cannot split on text such as ODI or field."
+              wide
+            />
+            <Figure
+              name="adaboost-onehot-after.png"
+              alt="Table image of the same rows after one-hot encoding"
+              caption="Figure 5: The same rows after one-hot encoding, with one 0/1 column for every category. Each row has exactly one 1 within each original column."
+              wide
+            />
+            <Figure
+              name="adaboost-train-sample.png"
+              alt="Table image of the first rows of the AdaBoost training set"
+              caption="Figure 6: The first rows of the AdaBoost training set, with the label in front and the one-hot columns at the end. These are the same matches as every other model's training set."
+              wide
+            />
+            <Figure
+              name="adaboost-test-sample.png"
+              alt="Table image of the first rows of the AdaBoost testing set"
+              caption="Figure 7: The first rows of the AdaBoost testing set. It stayed untouched until the number of rounds and the learning rate had been fixed."
+              wide
+            />
+          </div>
+          <DataLinks items={[
+            { href: dataUrl('adaboost-train.csv'), label: 'AdaBoost training set, one-hot encoded (CSV)', download: true },
+            { href: dataUrl('adaboost-test.csv'), label: 'AdaBoost testing set, one-hot encoded (CSV)', download: true },
+            { href: dataUrl('cricsheet-matches-clean.csv'), label: 'Cleaned source data (CSV)', download: true },
+            { href: dataUrl('cricsheet-matches-raw.csv'), label: 'Raw source data (CSV)', download: true },
+            { href: 'https://cricsheet.org/downloads/', label: 'Original raw archives' },
+          ]} />
+        </section>
+
+        <section className="assignment-section">
+          <h3>Code</h3>
+          <p>
+            Written in Python with <em>scikit-learn</em>&apos;s <em>AdaBoostClassifier</em>, using a{' '}
+            <em>DecisionTreeClassifier</em> with a maximum depth of 1 as the stump and the SAMME
+            algorithm. The validation curves come from <em>staged_predict</em>, which scores the
+            model after every round, and <em>pandas.get_dummies</em> performs the one-hot encoding.
+            scikit-learn&apos;s SAMME defines a stump&apos;s weight as the full natural log of
+            (1 − error) / error multiplied by the learning rate, which is twice the textbook alpha;
+            doubling every vote does not change which class wins.
+          </p>
+          <CodeLinks items={[
+            { file: 'regression_adaboost.py', label: 'regression_adaboost.py — linear and logistic regression, AdaBoost' },
+            { file: 'concept_figures.py', label: 'concept_figures.py — overview diagrams' },
+            { file: 'build_dataset.py', label: 'build_dataset.py — upstream data pipeline' },
+          ]} />
+        </section>
+
+        <section className="assignment-section">
+          <h3>Results</h3>
+          {boost && treeA ? (
+            <>
+              <h4>Tuning the number of rounds and the learning rate</h4>
+              <p>
+                Five learning rates ({boost.learning_rates.join(', ')}) were each run for up to{' '}
+                {boost.max_rounds} rounds on the fitting rows, and the validation accuracy was
+                recorded after every single round. Figure 8 shows how accuracy changes as rounds are
+                added. A high learning rate climbs quickly, passing 74 percent within a few rounds,
+                while low learning rates climb slowly and need many more stumps to reach a similar
+                level. The best validation accuracy, {percent(boost.chosen.val_accuracy)}, came at a
+                learning rate of {boost.chosen.learning_rate} after {boost.chosen.n_estimators}{' '}
+                rounds. A single validation split can flatter the setting it picks, so the chosen
+                settings were checked with 5-fold cross-validation on the full training set, which
+                gave a more sober {percent(boost.cv_accuracy)} (± {(boost.cv_std * 100).toFixed(1)}{' '}
+                points). The model was then refitted on every training row with those settings and
+                scored once on the test set.
+              </p>
+              <div className="analysis-figure-grid">
+                <Figure
+                  name="adaboost-validation-curve.png"
+                  alt="Line chart of validation accuracy against number of rounds for five learning rates"
+                  caption="Figure 8: Validation accuracy after every round for five learning rates, on a log scale of rounds, with the chosen setting starred. The curves rise steeply over the first few dozen rounds and then mostly level off."
+                  wide
+                />
+                <Figure
+                  name="adaboost-learning-rates.png"
+                  alt="Bar chart of the best validation accuracy at each learning rate"
+                  caption="Figure 9: The best validation accuracy each learning rate reached, and how many rounds it took. The spread between them is under two points, so the exact choice matters less than using enough rounds."
+                />
+                <Figure
+                  name="adaboost-confusion-matrix.png"
+                  alt="Confusion matrix for AdaBoost on the testing set"
+                  caption={`Figure 10: The AdaBoost confusion matrix on the test set. It identifies ${percent(recallOf(boost.confusion_matrix, 0), 0)} of the totals that were chased down and ${percent(recallOf(boost.confusion_matrix, 1), 0)} of those that were defended.`}
+                />
+              </div>
+              <div className="metric-strip">
+                <div><span>Test accuracy</span><strong>{percent(boost.accuracy)}</strong></div>
+                <div><span>Area under ROC curve</span><strong>{boost.roc_auc.toFixed(3)}</strong></div>
+                <div><span>Training accuracy</span><strong>{percent(boost.train_accuracy)}</strong></div>
+              </div>
+              <p>
+                The final model, {boost.chosen.n_estimators} stumps at a learning rate of{' '}
+                {boost.chosen.learning_rate}, was right on {percent(boost.accuracy)} of the test
+                matches, with an area under the ROC curve of {boost.roc_auc.toFixed(3)}. Its training
+                accuracy of {percent(boost.train_accuracy)} is close to its test accuracy, so it has
+                not overfitted, even with hundreds of rounds; stumps are so simple that each one adds
+                very little capacity. The first stumps show the reweighting at work. The first splits
+                on {boost.first_stumps[0].feature.toLowerCase()} at{' '}
+                {boost.first_stumps[0].threshold}, with a weighted error of{' '}
+                {boost.first_stumps[0].weighted_error.toFixed(3)} and a weight of{' '}
+                {boost.first_stumps[0].alpha.toFixed(3)}. The second then turns to{' '}
+                {boost.first_stumps[1].feature.toLowerCase()} at {boost.first_stumps[1].threshold},
+                and the third to {boost.first_stumps[2].feature.toLowerCase()}, each concentrating on
+                the matches the earlier stumps misjudged. The later stumps have higher errors and
+                smaller weights, because the easy cases have already been handled.
+              </p>
+              <div className="table-wrap">
+                <table className="results-table">
+                  <thead>
+                    <tr><th>Round</th><th>Question asked</th><th>Weighted error</th><th>Weight in the vote</th></tr>
+                  </thead>
+                  <tbody>
+                    {boost.first_stumps.map((stump, index) => (
+                      <tr key={index}>
+                        <td>{index + 1}</td>
+                        <td>{stump.feature} ≤ {stump.threshold}?</td>
+                        <td>{stump.weighted_error.toFixed(3)}</td>
+                        <td>{stump.alpha.toFixed(3)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <h4>Comparison with the Part 3 decision tree</h4>
+              <p>
+                The best decision tree from Part 3, Tree A, reached {percent(treeA.accuracy)} on the
+                same test matches. AdaBoost reached {percent(boost.accuracy)}, so boosting did better
+                by {boost.gain_over_tree_a_points.toFixed(1)} points, about{' '}
+                {Math.round((boost.gain_over_tree_a_points / 100) * results.test_rows)} more matches
+                called correctly out of {results.test_rows.toLocaleString()}. That is a real but modest
+                gain. Tree A&apos;s three levels already capture the main pattern, a split on run rate
+                followed by a split on the total, and the very first stumps here ask nearly the same
+                questions. What boosting adds is hundreds of small corrections that soften the hard
+                edges of a single tree. Among all the classifiers, logistic regression still finishes
+                narrowly ahead.
+              </p>
+              <div className="analysis-figure-grid">
+                <Figure
+                  name="adaboost-feature-importance.png"
+                  alt="Bar chart of feature importance across the boosted stumps"
+                  caption="Figure 11: How much each measurement contributes across all the stumps, weighted by their votes. The total carries the most weight, followed by run rate, powerplay scoring rate and wickets lost."
+                />
+                <Figure
+                  name="model-comparison.png"
+                  alt="Bar chart of test accuracy for every classifier on the site"
+                  caption="Figure 12: AdaBoost alongside every other classifier, all scored on the same untouched test set. It edges past the best decision tree and finishes just behind logistic regression."
+                />
+              </div>
+            </>
+          ) : pending('the AdaBoost results')}
+        </section>
+
+        <section className="assignment-section">
+          <h3>Conclusions</h3>
+          <p>
+            Combining hundreds of single questions about a first innings gives a slightly better
+            forecast than one carefully grown tree, but only slightly. That small gap is informative
+            in itself. It says that the main pattern deciding whether a total is defended is simple
+            and is found almost immediately: how many runs were scored, and how fast. The later
+            rounds refine the edges of that pattern, for example how many wickets fell and how much
+            of the total came in boundaries, without changing its basic shape.
+          </p>
+          <p>
+            Across every method tried so far, the best forecasts at the innings break land close to
+            three correct calls in four, and they agree closely with one another. When very different
+            methods reach the same ceiling, the limit is probably in the information rather than in
+            the methods. Everything still unknown at the innings break, such as how the chasing side
+            will bat, how the pitch will change and what the conditions will do in the evening,
+            decides roughly a quarter of matches. For anyone following a match, that is a useful
+            reminder that a strong first innings makes a win likely, not certain.
           </p>
         </section>
       </section>
@@ -1542,6 +2174,7 @@ function App() {
           <li>Run <code>concept_figures.py</code> for the explanatory diagrams in the Overview sections.</li>
           <li>Run <code>clustering_pca.py</code> for the clustering, PCA and SVD results.</li>
           <li>Run <code>supervised_models.py</code> for the Naive Bayes and Decision Tree results.</li>
+          <li>Run <code>regression_adaboost.py</code> for the linear regression, logistic regression and AdaBoost results.</li>
         </ol>
       </div>
       <CodeLinks items={[
@@ -1550,6 +2183,7 @@ function App() {
         { file: 'concept_figures.py', label: 'concept_figures.py' },
         { file: 'clustering_pca.py', label: 'clustering_pca.py' },
         { file: 'supervised_models.py', label: 'supervised_models.py' },
+        { file: 'regression_adaboost.py', label: 'regression_adaboost.py' },
         { file: 'plot_style.py', label: 'plot_style.py' },
       ]} />
     </section>
@@ -1581,8 +2215,6 @@ function App() {
   )
 
   const placeholders = {
-    Regression: ['Regression', 'Modelling a first-innings total as a continuous quantity rather than a category.'],
-    AdaBoost: ['AdaBoost', 'Combining many shallow trees, each one focused on the matches its predecessors got wrong.'],
     GradientBoosting: ['Gradient Boosting', 'Building an additive model that fits the residual error left by the previous stage.'],
     XGBoost: ['XGBoost', 'A regularised, optimised implementation of gradient boosting applied to the same split.'],
     SVM: ['Support Vector Machines', 'Separating the two outcomes with the widest possible margin, including non-linear kernels.'],
@@ -1597,6 +2229,8 @@ function App() {
       case 'PCA': return renderPca()
       case 'NaiveBayes': return renderNaiveBayes()
       case 'DecTrees': return renderDecisionTrees()
+      case 'Regression': return renderRegression()
+      case 'AdaBoost': return renderAdaBoost()
       case 'Conclusions': return renderConclusions()
       case 'About Me': return renderAboutMe()
       default: return renderPlaceholderTab(...placeholders[activeTab])

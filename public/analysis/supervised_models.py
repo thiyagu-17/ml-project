@@ -479,22 +479,26 @@ def run_decision_trees(X_train, X_test, y_train, y_test) -> dict:
               f"Which features {best_name.split(' - ')[0]} actually splits on",
               "Share of the tree's total impurity reduction (%)", "")
 
+    # Depth study. The test set is never used here: each depth is scored by
+    # 5-fold cross-validation inside the training set, so the held-out test
+    # rows stay untouched for the final comparison between models.
     depths = list(range(1, 21))
-    train_curve, test_curve = [], []
+    train_curve, cv_curve = [], []
     for depth in depths:
         model = DecisionTreeClassifier(criterion="gini", max_depth=depth,
-                                       random_state=RANDOM_STATE).fit(X_train, y_train)
-        train_curve.append(model.score(X_train, y_train))
-        test_curve.append(model.score(X_test, y_test))
+                                       random_state=RANDOM_STATE)
+        cv_curve.append(cross_val_score(model, X_train, y_train, cv=5,
+                                        scoring="accuracy").mean())
+        train_curve.append(model.fit(X_train, y_train).score(X_train, y_train))
 
     figure, axis = ps.new_axes(9.4, 5.1)
     axis.plot(depths, 100 * np.array(train_curve), marker="o", markersize=5,
-              linewidth=2.3, color=ps.ORANGE, label="Training set")
-    axis.plot(depths, 100 * np.array(test_curve), marker="s", markersize=5,
-              linewidth=2.3, color=ps.TEAL, label="Testing set")
-    best_depth = depths[int(np.argmax(test_curve))]
+              linewidth=2.3, color=ps.ORANGE, label="Accuracy on the rows it was trained on")
+    axis.plot(depths, 100 * np.array(cv_curve), marker="s", markersize=5,
+              linewidth=2.3, color=ps.TEAL, label="5-fold cross-validated accuracy")
+    best_depth = depths[int(np.argmax(cv_curve))]
     axis.axvline(best_depth, color=ps.SLATE, linestyle="--", linewidth=1.3)
-    axis.text(best_depth + 0.3, 52, f"best test depth = {best_depth}",
+    axis.text(best_depth + 0.3, 52, f"best cross-validated depth = {best_depth}",
               fontsize=10, color=ps.SLATE)
     axis.set_xticks(depths[::2])
     axis.legend(loc="center right")
@@ -503,8 +507,9 @@ def run_decision_trees(X_train, X_test, y_train, y_test) -> dict:
               "Maximum tree depth", "Accuracy (%)")
 
     return results, {"best_depth": int(best_depth),
+                     "best_cv_accuracy": round(float(max(cv_curve)), 4),
                      "deep_train_accuracy": round(float(train_curve[-1]), 4),
-                     "deep_test_accuracy": round(float(test_curve[-1]), 4)}
+                     "deep_cv_accuracy": round(float(cv_curve[-1]), 4)}
 
 
 # --------------------------------------------------------------------------

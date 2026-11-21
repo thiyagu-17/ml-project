@@ -1,0 +1,309 @@
+{
+  "train_rows": 4246,
+  "test_rows": 1820,
+  "overlapping_rows": 0,
+  "majority_class_baseline": 0.5088,
+  "linear": {
+    "target": "First-innings total (runs)",
+    "candidates": [
+      {
+        "name": "A: powerplay only",
+        "features": 2,
+        "cv_rmse": 62.21,
+        "cv_r2": 0.2772
+      },
+      {
+        "name": "B: + format, gender, toss",
+        "features": 5,
+        "cv_rmse": 41.87,
+        "cv_r2": 0.6723
+      },
+      {
+        "name": "C: + separate slopes per format",
+        "features": 7,
+        "cv_rmse": 41.47,
+        "cv_r2": 0.6788
+      }
+    ],
+    "chosen": "C: + separate slopes per format",
+    "features": [
+      "PP runs",
+      "PP wickets",
+      "Is T20",
+      "Is women's",
+      "Toss winner batted",
+      "PP runs x T20",
+      "PP wickets x T20"
+    ],
+    "intercept": 184.88,
+    "coefficients": {
+      "PP runs": 2.005,
+      "PP wickets": -15.617,
+      "Is T20": -112.407,
+      "Is women's": -20.062,
+      "Toss winner batted": -2.192,
+      "PP runs x T20": -0.006,
+      "PP wickets x T20": 10.959
+    },
+    "slopes": {
+      "odi_run": 2.01,
+      "t20_run": 2.0,
+      "odi_wicket": -15.62,
+      "t20_wicket": -4.66
+    },
+    "test_rmse": 40.39,
+    "test_mae": 30.54,
+    "test_r2": 0.6825,
+    "test_r2_odi": 0.3974,
+    "test_r2_t20": 0.527,
+    "test_mae_odi": 40.28,
+    "test_mae_t20": 22.96,
+    "baseline_rmse": 54.15,
+    "baseline_mae": 41.57,
+    "train_rows": 4246,
+    "test_rows": 1820
+  },
+  "logistic": {
+    "c_grid": [
+      0.001,
+      0.00316,
+      0.01,
+      0.03162,
+      0.1,
+      0.31623,
+      1.0,
+      3.16228,
+      10.0,
+      31.62278,
+      100.0
+    ],
+    "cv_accuracy": [
+      0.7322,
+      0.7369,
+      0.7367,
+      0.744,
+      0.7449,
+      0.7447,
+      0.7447,
+      0.7447,
+      0.7445,
+      0.7442,
+      0.7445
+    ],
+    "best_c": 0.1,
+    "best_cv_accuracy": 0.7449,
+    "accuracy": 0.7368,
+    "roc_auc": 0.8135,
+    "confusion_matrix": [
+      [
+        714,
+        212
+      ],
+      [
+        267,
+        627
+      ]
+    ],
+    "intercept": -0.0564,
+    "odds_ratio_per_sd": {
+      "Runs": 2.799,
+      "Wickets": 0.816,
+      "Fours": 1.007,
+      "Sixes": 1.004,
+      "Extras": 0.94,
+      "PP runs": 0.957,
+      "PP wickets": 0.896,
+      "Run rate": 3.686,
+      "PP run rate": 0.952,
+      "Boundary %": 0.641,
+      "Dot ball %": 1.075,
+      "Is T20": 1.176,
+      "Is women's": 1.161,
+      "Toss winner batted": 1.063
+    },
+    "coef_per_unit": {
+      "Runs": 0.01406,
+      "Wickets": -0.09455,
+      "Fours": 0.00083,
+      "Sixes": 0.00111,
+      "Extras": -0.00976,
+      "PP runs": -0.00309,
+      "PP wickets": -0.09561,
+      "Run rate": 0.61624,
+      "PP run rate": -0.02004,
+      "Boundary %": -3.85312,
+      "Dot ball %": 0.58904,
+      "Is T20": 0.32618,
+      "Is women's": 0.52016,
+      "Toss winner batted": 0.12161
+    },
+    "feature_sd": {
+      "Runs": 73.2275,
+      "Wickets": 2.1548,
+      "Fours": 8.067,
+      "Sixes": 3.9761,
+      "Extras": 6.3234,
+      "PP runs": 14.3583,
+      "PP wickets": 1.1449,
+      "Run rate": 2.1171,
+      "PP run rate": 2.4565,
+      "Boundary %": 0.1155,
+      "Dot ball %": 0.1226,
+      "Is T20": 0.4981,
+      "Is women's": 0.2878,
+      "Toss winner batted": 0.4999
+    },
+    "odds_per_10_runs": 1.151,
+    "odds_per_wicket": 0.91,
+    "odds_per_run_rate": 1.852,
+    "odds_toss_batted": 1.129
+  },
+  "adaboost": {
+    "features": [
+      "Runs",
+      "Wickets",
+      "Fours",
+      "Sixes",
+      "Extras",
+      "PP runs",
+      "PP wickets",
+      "Run rate",
+      "PP run rate",
+      "Boundary %",
+      "Dot ball %",
+      "match_type_ODI",
+      "match_type_T20",
+      "gender_female",
+      "gender_male",
+      "toss_decision_bat",
+      "toss_decision_field"
+    ],
+    "n_features": 17,
+    "learning_rates": [
+      0.05,
+      0.1,
+      0.25,
+      0.5,
+      1.0
+    ],
+    "max_rounds": 600,
+    "fit_rows": 3184,
+    "validation_rows": 1062,
+    "best_by_rate": {
+      "0.05": {
+        "rounds": 69,
+        "val_accuracy": 0.7373
+      },
+      "0.1": {
+        "rounds": 30,
+        "val_accuracy": 0.7363
+      },
+      "0.25": {
+        "rounds": 35,
+        "val_accuracy": 0.7448
+      },
+      "0.5": {
+        "rounds": 274,
+        "val_accuracy": 0.7439
+      },
+      "1.0": {
+        "rounds": 477,
+        "val_accuracy": 0.7524
+      }
+    },
+    "chosen": {
+      "learning_rate": 1.0,
+      "n_estimators": 477,
+      "val_accuracy": 0.7524
+    },
+    "cv_accuracy": 0.7372,
+    "cv_std": 0.0192,
+    "accuracy": 0.7308,
+    "train_accuracy": 0.7478,
+    "roc_auc": 0.8009,
+    "confusion_matrix": [
+      [
+        704,
+        222
+      ],
+      [
+        268,
+        626
+      ]
+    ],
+    "first_stumps": [
+      {
+        "feature": "Run rate",
+        "threshold": 5.001,
+        "weighted_error": 0.3415,
+        "alpha": 0.6566
+      },
+      {
+        "feature": "Runs",
+        "threshold": 157.5,
+        "weighted_error": 0.3478,
+        "alpha": 0.6288
+      },
+      {
+        "feature": "Wickets",
+        "threshold": 8.5,
+        "weighted_error": 0.3579,
+        "alpha": 0.5846
+      },
+      {
+        "feature": "Wickets",
+        "threshold": 9.5,
+        "weighted_error": 0.4016,
+        "alpha": 0.3989
+      },
+      {
+        "feature": "Run rate",
+        "threshold": 6.334,
+        "weighted_error": 0.4161,
+        "alpha": 0.3387
+      },
+      {
+        "feature": "Runs",
+        "threshold": 183.5,
+        "weighted_error": 0.4039,
+        "alpha": 0.3894
+      }
+    ],
+    "tree_a_accuracy": 0.7236,
+    "gain_over_tree_a_points": 0.72
+  },
+  "comparison": [
+    {
+      "model": "Bernoulli NB",
+      "accuracy": 0.6918
+    },
+    {
+      "model": "Multinomial NB",
+      "accuracy": 0.7071
+    },
+    {
+      "model": "Gaussian NB",
+      "accuracy": 0.7121
+    },
+    {
+      "model": "Tree B",
+      "accuracy": 0.717
+    },
+    {
+      "model": "Tree C",
+      "accuracy": 0.7209
+    },
+    {
+      "model": "Tree A",
+      "accuracy": 0.7236
+    },
+    {
+      "model": "AdaBoost",
+      "accuracy": 0.7308
+    },
+    {
+      "model": "Logistic regression",
+      "accuracy": 0.7368
+    }
+  ]
+}
