@@ -35,6 +35,7 @@ OUTPUT_DIR = PUBLIC_DIR / "analysis"
 RANDOM_STATE = 42
 K_VALUES = [2, 3, 4, 5, 6, 7, 8]
 HEADLINE_K = [2, 3, 4]
+SILHOUETTE_TIE = 0.01
 HIERARCHICAL_SAMPLE = 1000
 DENDROGRAM_SAMPLE = 250
 
@@ -96,12 +97,12 @@ def figure_silhouette_curve(kmeans_scores, hierarchical_scores, best_k) -> None:
               linewidth=2.4, color=ps.ORANGE,
               label=f"Average linkage (cosine, {HIERARCHICAL_SAMPLE:,}-match sample)")
     axis.axvline(best_k, color=ps.SLATE, linestyle="--", linewidth=1.3)
-    axis.text(best_k + 0.1, axis.get_ylim()[1] * 0.96, f"best k = {best_k}",
+    axis.text(best_k + 0.1, axis.get_ylim()[1] * 0.96, f"chosen k = {best_k}",
               fontsize=10, color=ps.SLATE, va="top")
     axis.set_xticks(ks)
     axis.legend(loc="upper right")
     ps.finish(figure, axis, "silhouette-comparison.png",
-              "Both methods score highest at the same number of clusters",
+              "Silhouette score for each number of clusters, both methods",
               "Number of clusters (k)", "Mean silhouette score")
 
 
@@ -222,7 +223,9 @@ def figure_cluster_composition(clean, labels, k) -> None:
 def figure_dendrogram(sample_matrix, sample_frame, cut_k) -> None:
     distances = pdist(sample_matrix, metric="cosine")
     tree = linkage(distances, method="average")
-    threshold = tree[-(cut_k - 1), 2]
+    # Cut halfway between the merge that would leave fewer than k groups and
+    # the merge below it, so the dashed line visibly crosses k branches.
+    threshold = (tree[-(cut_k - 1), 2] + tree[-cut_k, 2]) / 2
 
     figure, axis = ps.new_axes(11.0, 5.6)
     axis.grid(alpha=0.16, axis="y")
@@ -346,13 +349,20 @@ def figure_svd(singular_values, eigenvalues) -> None:
     ps.save(figure, "svd-spectrum.png")
 
 
-def figure_model_sample(features: pd.DataFrame) -> None:
+def figure_model_sample(features: pd.DataFrame, scaled: np.ndarray) -> None:
     sample = features.head(6).round(3)
     sample.columns = [SHORT[c] for c in sample.columns]
     ps.table_figure(
         sample, "clustering-input-sample.png",
-        "Unlabelled numeric input for clustering and PCA",
-        f"{len(features):,} matches x {len(FEATURES)} features, standardised before fitting",
+        "Unlabelled numeric input for clustering and PCA, before scaling",
+        f"{len(features):,} matches x {len(FEATURES)} features, no label and no text columns",
+        max_columns=11, width=13.5,
+    )
+    standardised = pd.DataFrame(scaled[:6], columns=[SHORT[c] for c in FEATURES]).round(2)
+    ps.table_figure(
+        standardised, "clustering-input-standardised.png",
+        "The same rows after standardising: the matrix the models actually receive",
+        "Each value is in standard deviations from that column's mean (z-score)",
         max_columns=11, width=13.5,
     )
 
@@ -366,22 +376,24 @@ def main() -> None:
     print(f"  matrix {scaled.shape}", flush=True)
 
     features.round(4).to_csv(DATA_DIR / "clustering-input-sample.csv", index=False)
-    figure_model_sample(features)
+    pd.DataFrame(scaled, columns=FEATURES).round(4).to_csv(
+        DATA_DIR / "clustering-input-standardised.csv", index=False)
+    figure_model_sample(features, scaled)
 
     # --- k-means -----------------------------------------------------------
     kmeans_scores, kmeans_labels = [], {}
     for k in K_VALUES:
         model = KMeans(n_clusters=k, n_init=10, random_state=RANDOM_STATE)
         labels = model.fit_predict(scaled)
-        score = float(silhouette_score(scaled, labels, sample_size=3000,
-                                       random_state=RANDOM_STATE))
+        # Scored on every match rather than a random subsample, so the
+        # comparison between neighbouring k values is not sampling noise.
+        score = float(silhouette_score(scaled, labels))
         kmeans_scores.append({"k": k, "silhouette": round(score, 4),
                               "inertia": round(float(model.inertia_), 1)})
         kmeans_labels[k] = labels
         print(f"    k-means k={k} silhouette={score:.4f}", flush=True)
 
     best_kmeans = max(kmeans_scores, key=lambda row: row["silhouette"])
-    best_k = best_kmeans["k"]
 
     # --- hierarchical ------------------------------------------------------
     positions = stratified_sample(clean, HIERARCHICAL_SAMPLE)
@@ -406,12 +418,29 @@ def main() -> None:
         hierarchical_labels[best_hierarchical["k"]],
     )
 
+    # Choosing k. When the k-means silhouette at the hierarchical method's best
+    # k is within SILHOUETTE_TIE of the k-means maximum, the two are treated as
+    # tied and the k that both methods support is used; otherwise k-means wins.
+    kmeans_at_hier_k = next(row["silhouette"] for row in kmeans_scores
+                            if row["k"] == best_hierarchical["k"])
+    agree = best_kmeans["k"] == best_hierarchical["k"]
+    tied = (not agree) and best_kmeans["silhouette"] - kmeans_at_hier_k <= SILHOUETTE_TIE
+    best_k = best_hierarchical["k"] if tied else best_kmeans["k"]
+    chosen_kmeans_silhouette = next(row["silhouette"] for row in kmeans_scores
+                                    if row["k"] == best_k)
+
     # --- PCA and SVD -------------------------------------------------------
     pca = PCA().fit(scaled)
     coordinates = pca.transform(scaled)
     explained = pca.explained_variance_ratio_
     cumulative = np.cumsum(explained)
-    loadings = pca.components_
+    loadings = pca.components_.copy()
+    # The sign of a principal component is arbitrary and can flip when the
+    # data changes slightly. Fix it so each component's largest loading is
+    # positive, which keeps the plots and their descriptions stable.
+    signs = np.sign(loadings[np.arange(len(loadings)), np.abs(loadings).argmax(axis=1)])
+    loadings *= signs[:, None]
+    coordinates = coordinates * signs[None, :]
 
     centred = scaled - scaled.mean(axis=0)
     singular_values = np.linalg.svd(centred, full_matrices=False)[1]
@@ -419,7 +448,7 @@ def main() -> None:
 
     # --- figures -----------------------------------------------------------
     figure_silhouette_curve(kmeans_scores, hierarchical_scores, best_k)
-    figure_silhouette_profile(scaled, kmeans_labels[best_k], best_k, best_kmeans["silhouette"])
+    figure_silhouette_profile(scaled, kmeans_labels[best_k], best_k, chosen_kmeans_silhouette)
     figure_cluster_scatter(coordinates, kmeans_labels[best_k], explained, best_k)
     figure_cluster_profiles(features, kmeans_labels[best_k], best_k)
     figure_cluster_composition(clean, kmeans_labels[best_k], best_k)
@@ -437,8 +466,13 @@ def main() -> None:
         "feature_names": FEATURES,
         "scaled": True,
         "kmeans": kmeans_scores,
-        "kmeans_best_k": best_k,
+        "kmeans_best_k": best_kmeans["k"],
         "kmeans_best_silhouette": best_kmeans["silhouette"],
+        "silhouette_tie_tolerance": SILHOUETTE_TIE,
+        "methods_agree_on_k": bool(agree),
+        "kmeans_tied_with_hierarchical_k": bool(tied),
+        "chosen_k": best_k,
+        "chosen_k_kmeans_silhouette": chosen_kmeans_silhouette,
         "headline_k": {str(row["k"]): row["silhouette"]
                        for row in kmeans_scores if row["k"] in HEADLINE_K},
         "hierarchical": hierarchical_scores,
@@ -475,7 +509,8 @@ def main() -> None:
     with open(OUTPUT_DIR / "clustering-pca-results.json", "w", encoding="utf-8") as handle:
         json.dump(results, handle, indent=2)
 
-    print(f"\n  best k-means k={best_k} silhouette={best_kmeans['silhouette']}")
+    print(f"\n  best k-means k={best_kmeans['k']} silhouette={best_kmeans['silhouette']}")
+    print(f"  chosen k={best_k} (tied with hierarchical: {tied})")
     print(f"  best hclust  k={best_hierarchical['k']} silhouette={best_hierarchical['silhouette']}")
     print(f"  ARI between the two at k={best_hierarchical['k']}: {agreement:.3f}")
     print(f"  components for 90% variance: {components_for_90}")

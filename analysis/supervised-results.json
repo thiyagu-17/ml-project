@@ -49,9 +49,9 @@
     },
     "Bernoulli NB": {
       "accuracy": 0.6918,
-      "roc_auc": 0.7639,
+      "roc_auc": 0.7636,
       "cv_mean": 0.7011,
-      "cv_std": 0.0124,
+      "cv_std": 0.0128,
       "confusion_matrix": [
         [
           648,

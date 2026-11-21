@@ -204,11 +204,23 @@ def figure_correlation_heatmap(clean: pd.DataFrame) -> None:
               "Run rate, boundaries and dot balls move together", "", "")
 
 
-def figure_matches_per_year(clean: pd.DataFrame) -> None:
+def complete_year_counts(clean: pd.DataFrame) -> pd.DataFrame:
+    """Matches per year and format, leaving out the final, partial season."""
     counts = clean.pivot_table(index="year", columns="match_type",
                                values="match_id", aggfunc="count").fillna(0)
-    counts = counts.loc[counts.index < counts.index.max()]
+    return counts.loc[counts.index < counts.index.max()]
 
+
+def t20_majority_since(clean: pd.DataFrame) -> int:
+    """First year from which T20 matches outnumber ODIs in every later season."""
+    counts = complete_year_counts(clean)
+    t20_ahead = counts.get("T20", 0) > counts.get("ODI", 0)
+    behind = t20_ahead[~t20_ahead]
+    return int(behind.index.max() + 1) if len(behind) else int(counts.index.min())
+
+
+def figure_matches_per_year(clean: pd.DataFrame) -> None:
+    counts = complete_year_counts(clean)
     figure, axis = ps.new_axes(9.5, 5.0)
     bottom = np.zeros(len(counts))
     for fmt in ["ODI", "T20"]:
@@ -218,8 +230,9 @@ def figure_matches_per_year(clean: pd.DataFrame) -> None:
                  color=ps.FORMAT_COLOURS[fmt], label=fmt, width=0.78)
         bottom += counts[fmt].values
     axis.legend(loc="upper left")
+    since = t20_majority_since(clean)
     ps.finish(figure, axis, "matches-per-year.png",
-              "Twenty-over cricket overtakes the fifty-over game after 2015",
+              f"Twenty-over matches outnumber fifty-over matches every year from {since}",
               "Year", "Matches in the cleaned dataset")
 
 
@@ -395,6 +408,12 @@ def main() -> None:
     has_weather = figure_weather(clean)
 
     correlations = clean[NUMERIC_FOR_CORRELATION].corr()["first_innings_runs"].drop("first_innings_runs")
+
+    # Venue spellings before and after the merge rule used in build_dataset.py,
+    # measured on the raw table so the effect of the rule is shown on its own.
+    from build_dataset import canonical_venues
+    raw_venues = raw["venue"].fillna("").astype(str).str.strip()
+    merged_venues = canonical_venues(raw_venues)
     summary = {
         "raw_rows": int(len(raw)),
         "raw_columns": int(raw.shape[1]),
@@ -405,13 +424,25 @@ def main() -> None:
         "rows_removed": int(len(raw) - len(clean)),
         "date_range": [clean["date"].min(), clean["date"].max()],
         "venues": int(clean["venue"].nunique()),
+        "raw_venues": int(raw_venues.nunique()),
+        "venues_after_merge": int(merged_venues.nunique()),
+        "venue_spellings_merged": int(raw_venues.nunique() - merged_venues.nunique()),
         "cities": int(clean["city"].nunique()),
+        "weather_rows": int(len(pd.read_csv(DATA_DIR / "venue-weather.csv")))
+        if (DATA_DIR / "venue-weather.csv").exists() else 0,
+        # Written by build_dataset.py, which applies the cleaning rules.
+        "bowled_out_short_innings_removed": json.loads(
+            (DATA_DIR / "dataset-summary.json").read_text(encoding="utf-8")
+        ).get("bowled_out_short_innings_removed"),
         "teams": int(pd.concat([clean["team_a"], clean["team_b"]]).nunique()),
         "formats": clean["match_type"].value_counts().to_dict(),
         "genders": clean["gender"].value_counts().to_dict(),
         "label_balance": clean["result_label"].value_counts().to_dict(),
         "toss_winner_win_rate": round(float(clean["toss_winner_won_match"].mean()), 4),
         "toss_chose_to_bat_rate": round(float(clean["toss_winner_batted"].mean()), 4),
+        "toss_decision_win_rate": clean.groupby("toss_decision")["toss_winner_won_match"]
+        .mean().round(4).to_dict(),
+        "t20_majority_since": t20_majority_since(clean),
         "median_runs": clean.groupby("match_type")["first_innings_runs"].median().to_dict(),
         "mean_run_rate": clean.groupby("match_type")["first_innings_run_rate"].mean().round(2).to_dict(),
         "powerplay_correlation": round(
