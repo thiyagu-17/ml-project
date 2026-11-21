@@ -10,6 +10,11 @@ Writes into public/analysis/:
     concept-pca-eigenvectors.png         eigenvectors of a 2-D cloud and projection onto PC1
     concept-dimensionality.png           why distances lose meaning in high dimensions
     concept-impurity-curves.png          Gini and entropy against class proportion
+    concept-linear-regression.png        a fitted line and its residuals
+    concept-sigmoid.png                  score -> probability -> class, and why not a line
+    concept-adaboost-rounds.png          AdaBoost reweighting, round by round
+    concept-bagging-boosting.png         bagging against boosting
+    concept-adaboost-alpha.png           a stump's alpha against its error
 
 Run:  python public/analysis/concept_figures.py
 """
@@ -18,6 +23,8 @@ from __future__ import annotations
 
 import numpy as np
 from scipy.cluster.hierarchy import dendrogram, linkage, set_link_color_palette
+from sklearn.linear_model import LogisticRegression
+from sklearn.tree import DecisionTreeClassifier
 
 import plot_style as ps
 
@@ -227,12 +234,233 @@ def figure_impurity_curves() -> None:
               "Share of the node in one class (p)", "Impurity")
 
 
+# --------------------------------------------------------------------------
+# Regression
+# --------------------------------------------------------------------------
+
+
+def figure_linear_regression() -> None:
+    x = RNG.uniform(20, 70, 60)
+    y = 60 + 2.0 * x + RNG.normal(0, 18, 60)
+    slope, intercept = np.polyfit(x, y, 1)
+    fitted = intercept + slope * x
+
+    figure, axis = ps.new_axes(9.2, 5.4)
+    for xi, yi, fi in zip(x, y, fitted):
+        axis.plot([xi, xi], [yi, fi], color=ps.ORANGE, linewidth=1, alpha=0.7)
+    axis.scatter(x, y, s=30, color=ps.SLATE, zorder=3, label="Observed values")
+    grid = np.linspace(15, 75, 2)
+    axis.plot(grid, intercept + slope * grid, color=ps.TEAL, linewidth=3,
+              label=f"Fitted line: y = {intercept:.0f} + {slope:.2f} x")
+    axis.plot([], [], color=ps.ORANGE, linewidth=1.5, label="Residuals (errors) the line minimises")
+    axis.annotate(f"slope = {slope:.2f}:\neach extra unit of x adds\n{slope:.2f} units of y",
+                  xy=(60, intercept + slope * 60), xytext=(28, intercept + slope * 72),
+                  fontsize=10, arrowprops={"arrowstyle": "-|>", "color": ps.SLATE})
+    axis.legend(loc="lower right")
+    ps.finish(figure, axis, "concept-linear-regression.png",
+              "Linear regression: the straight line with the smallest squared errors",
+              "Input x (for example, powerplay runs)", "Numeric target y (for example, final total)")
+
+
+def figure_sigmoid() -> None:
+    figure, axes = ps.plt.subplots(1, 2, figsize=(13.0, 5.0))
+    for axis in axes:
+        style(axis)
+
+    # Left: score -> probability -> class.
+    axis = axes[0]
+    z = np.linspace(-7, 7, 300)
+    probability = 1 / (1 + np.exp(-z))
+    axis.axvspan(-7, 0, color=ps.ORANGE, alpha=0.10)
+    axis.axvspan(0, 7, color=ps.TEAL, alpha=0.10)
+    axis.plot(z, probability, color=ps.INK, linewidth=2.8)
+    axis.axhline(0.5, color=ps.SLATE, linestyle="--", linewidth=1.2)
+    axis.text(-6.7, 0.53, "threshold 0.5", fontsize=10, color=ps.SLATE)
+    axis.text(-3.6, 0.88, "predict class 0", fontsize=11, color=ps.ORANGE, fontweight="bold")
+    axis.text(1.0, 0.1, "predict class 1", fontsize=11, color=ps.TEAL, fontweight="bold")
+    axis.annotate("score z = 2  →  p = 0.88", xy=(2, 1 / (1 + np.exp(-2))), xytext=(2.4, 0.62),
+                  fontsize=10, arrowprops={"arrowstyle": "-|>", "color": ps.SLATE})
+    axis.set_title("Sigmoid: p = 1 / (1 + e^(−z)) squeezes any score into 0–1",
+                   fontsize=12, fontweight="bold", loc="left")
+    axis.set_xlabel("Linear score z = b0 + b1·x1 + b2·x2 + …")
+    axis.set_ylabel("Probability of class 1")
+
+    # Right: a straight line against the S-curve on yes/no data.
+    axis = axes[1]
+    x = np.sort(RNG.uniform(3, 9, 120))
+    truth = 1 / (1 + np.exp(-(x - 6) * 1.6))
+    y = (RNG.uniform(size=x.size) < truth).astype(int)
+    jitter = y + RNG.uniform(-0.03, 0.03, y.size)
+    axis.scatter(x, jitter, s=18, color=ps.SAND, edgecolor="none", label="Observed outcome (0 or 1)")
+    slope, intercept = np.polyfit(x, y, 1)
+    grid = np.linspace(2.5, 9.5, 200)
+    axis.plot(grid, intercept + slope * grid, color=ps.ORANGE, linewidth=2.4,
+              label="Linear regression: escapes 0–1")
+    logistic = LogisticRegression().fit(x.reshape(-1, 1), y)
+    axis.plot(grid, logistic.predict_proba(grid.reshape(-1, 1))[:, 1], color=ps.TEAL, linewidth=2.8,
+              label="Logistic regression: stays a probability")
+    axis.axhline(0, color=ps.SLATE, linewidth=0.8)
+    axis.axhline(1, color=ps.SLATE, linewidth=0.8)
+    axis.legend(loc="upper left", fontsize=9.5)
+    axis.set_title("Why a yes/no target needs the S-curve", fontsize=12, fontweight="bold", loc="left")
+    axis.set_xlabel("Input x (for example, run rate)")
+    axis.set_ylabel("Outcome / predicted probability")
+    ps.save(figure, "concept-sigmoid.png")
+
+
+# --------------------------------------------------------------------------
+# AdaBoost
+# --------------------------------------------------------------------------
+
+
+def figure_adaboost_rounds() -> None:
+    """Textbook AdaBoost with stumps, drawn round by round on a toy dataset."""
+    n = 60
+    points = RNG.uniform(0, 10, size=(n, 2))
+    labels = np.where((points[:, 0] > 4) & (points[:, 1] > 3) | (points[:, 1] > 8), 1, -1)
+    flip = RNG.choice(n, 4, replace=False)
+    labels[flip] *= -1
+
+    weights = np.full(n, 1 / n)
+    stumps, alphas = [], []
+    figure, axes = ps.plt.subplots(1, 4, figsize=(16.5, 4.6), sharex=True, sharey=True)
+    for round_index in range(3):
+        stump = DecisionTreeClassifier(max_depth=1).fit(points, labels, sample_weight=weights)
+        wrong = stump.predict(points) != labels
+        error = weights[wrong].sum()
+        alpha = 0.5 * np.log((1 - error) / error)
+        axis = axes[round_index]
+        style(axis)
+        sizes = 2400 * weights
+        for value, colour in [(1, ps.TEAL), (-1, ps.ORANGE)]:
+            mask = labels == value
+            axis.scatter(points[mask, 0], points[mask, 1], s=sizes[mask], color=colour,
+                         edgecolor=ps.INK, linewidth=0.5, alpha=0.85)
+        axis.scatter(points[wrong, 0], points[wrong, 1], s=sizes[wrong] * 1.9, facecolor="none",
+                     edgecolor=ps.INK, linewidth=1.4)
+        feature, threshold = stump.tree_.feature[0], stump.tree_.threshold[0]
+        if feature == 0:
+            axis.axvline(threshold, color=ps.INK, linewidth=2.4)
+        else:
+            axis.axhline(threshold, color=ps.INK, linewidth=2.4)
+        axis.set_title(f"Round {round_index + 1}: error {error:.2f}, alpha {alpha:.2f}",
+                       fontsize=11.5, fontweight="bold", loc="left")
+        stumps.append(stump)
+        alphas.append(alpha)
+        weights = weights * np.exp(np.where(wrong, alpha, -alpha))
+        weights /= weights.sum()
+
+    # Final weighted vote of many rounds, shown as a decision surface.
+    weights = np.full(n, 1 / n)
+    ensemble = []
+    for _ in range(25):
+        stump = DecisionTreeClassifier(max_depth=1).fit(points, labels, sample_weight=weights)
+        wrong = stump.predict(points) != labels
+        error = max(weights[wrong].sum(), 1e-6)
+        alpha = 0.5 * np.log((1 - error) / error)
+        ensemble.append((alpha, stump))
+        weights = weights * np.exp(np.where(wrong, alpha, -alpha))
+        weights /= weights.sum()
+    grid_x, grid_y = np.meshgrid(np.linspace(0, 10, 200), np.linspace(0, 10, 200))
+    grid = np.column_stack([grid_x.ravel(), grid_y.ravel()])
+    vote = sum(alpha * stump.predict(grid) for alpha, stump in ensemble).reshape(grid_x.shape)
+    axis = axes[3]
+    style(axis)
+    axis.contourf(grid_x, grid_y, np.sign(vote), levels=[-2, 0, 2],
+                  colors=[ps.ORANGE, ps.TEAL], alpha=0.18)
+    for value, colour in [(1, ps.TEAL), (-1, ps.ORANGE)]:
+        mask = labels == value
+        axis.scatter(points[mask, 0], points[mask, 1], s=40, color=colour,
+                     edgecolor=ps.INK, linewidth=0.5)
+    axis.set_title("Final: weighted vote of 25 stumps", fontsize=11.5, fontweight="bold", loc="left")
+    for axis in axes:
+        axis.set_xlabel("Feature 1")
+    axes[0].set_ylabel("Feature 2")
+    figure.suptitle("AdaBoost round by round: point size = weight, ringed points = misclassified",
+                    fontsize=14, fontweight="bold", x=0.01, ha="left")
+    ps.save(figure, "concept-adaboost-rounds.png")
+
+
+def _box(axis, x, y, text, colour, width=1.9, height=0.8):
+    axis.add_patch(ps.plt.Rectangle((x - width / 2, y - height / 2), width, height,
+                                    facecolor=colour, edgecolor="none", alpha=0.9))
+    axis.text(x, y, text, ha="center", va="center", fontsize=10, color="white", fontweight="bold")
+
+
+def _arrow(axis, start, end, text=""):
+    axis.annotate("", xy=end, xytext=start,
+                  arrowprops={"arrowstyle": "-|>", "color": ps.SLATE, "linewidth": 1.6})
+    if text:
+        axis.text((start[0] + end[0]) / 2, (start[1] + end[1]) / 2 + 0.28, text,
+                  ha="center", fontsize=9, color=ps.SLATE)
+
+
+def figure_bagging_vs_boosting() -> None:
+    figure, axes = ps.plt.subplots(1, 2, figsize=(14.0, 5.0))
+    for axis in axes:
+        axis.axis("off")
+        axis.set_xlim(0, 10)
+        axis.set_ylim(0, 7)
+
+    axis = axes[0]
+    axis.set_title("Bagging: independent trees, built side by side", fontsize=12.5,
+                   fontweight="bold", loc="left")
+    _box(axis, 5, 6.2, "Training data", ps.SLATE, width=3)
+    for i, x in enumerate([1.6, 5, 8.4]):
+        _arrow(axis, (5, 5.75), (x, 4.75))
+        _box(axis, x, 4.3, f"Random sample {i + 1}", ps.SAND, width=2.6)
+        _arrow(axis, (x, 3.85), (x, 2.95))
+        _box(axis, x, 2.5, f"Full tree {i + 1}", ps.TEAL, width=2.6)
+        _arrow(axis, (x, 2.05), (5, 1.05))
+    _box(axis, 5, 0.6, "Equal vote", ps.INK, width=3)
+
+    axis = axes[1]
+    axis.set_title("Boosting: each stump fixes the last one's mistakes", fontsize=12.5,
+                   fontweight="bold", loc="left")
+    xs = [1.3, 3.8, 6.3, 8.8]
+    for i, x in enumerate(xs):
+        label = "…" if i == 3 else f"Stump {i + 1}"
+        _box(axis, x, 4.3, label, ps.TEAL if i < 3 else ps.SLATE, width=1.9)
+        _box(axis, x, 6.0, "Equal weights" if i == 0 else "Reweighted data", ps.SAND, width=2.2)
+        _arrow(axis, (x, 5.6), (x, 4.75))
+        if i < 3:
+            _arrow(axis, (x + 0.95, 4.3), (xs[i + 1] - 0.95, 5.8), "up-weight errors")
+            _arrow(axis, (x, 3.85), (5.0, 1.05))
+        axis.text(x, 3.45, f"alpha {i + 1}" if i < 3 else "", ha="center", fontsize=9.5,
+                  color=ps.INK)
+    _box(axis, 5, 0.6, "Vote weighted by alpha", ps.INK, width=3.6)
+    ps.save(figure, "concept-bagging-boosting.png")
+
+
+def figure_alpha() -> None:
+    error = np.linspace(0.01, 0.99, 400)
+    alpha = 0.5 * np.log((1 - error) / error)
+    figure, axis = ps.new_axes(9.2, 5.0)
+    axis.plot(error, alpha, color=ps.TEAL, linewidth=2.8)
+    axis.axhline(0, color=ps.SLATE, linewidth=1)
+    axis.axvline(0.5, color=ps.SLATE, linestyle="--", linewidth=1.2)
+    axis.text(0.52, 1.6, "error 0.5 = coin flip:\nalpha 0, the stump gets no say",
+              fontsize=10, color=ps.SLATE)
+    axis.annotate("accurate stump:\nlarge say in the vote", xy=(0.1, 0.5 * np.log(9)),
+                  xytext=(0.17, 1.9), fontsize=10,
+                  arrowprops={"arrowstyle": "-|>", "color": ps.SLATE})
+    axis.set_ylim(-2.4, 2.4)
+    ps.finish(figure, axis, "concept-adaboost-alpha.png",
+              "A stump's weight in the vote: alpha = ½ · ln((1 − error) / error)",
+              "Weighted error of the stump", "alpha")
+
+
 def main() -> None:
     figure_kmeans_steps()
     figure_hierarchical_and_distance()
     figure_pca_eigenvectors()
     figure_dimensionality()
     figure_impurity_curves()
+    figure_linear_regression()
+    figure_sigmoid()
+    figure_adaboost_rounds()
+    figure_bagging_vs_boosting()
+    figure_alpha()
 
 
 if __name__ == "__main__":
